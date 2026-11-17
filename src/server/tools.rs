@@ -61,6 +61,8 @@ pub struct CreateWorkPackageParams {
     pub priority_id: Option<i64>,
     /// Optional Assignee User ID
     pub assignee_id: Option<i64>,
+    /// Optional Parent Work Package ID (creates this work package as a child/subtask)
+    pub parent_id: Option<i64>,
     /// Start date in ISO format YYYY-MM-DD
     pub start_date: Option<String>,
     /// Due date in ISO format YYYY-MM-DD
@@ -88,6 +90,8 @@ pub struct UpdateWorkPackageParams {
     pub priority_id: Option<i64>,
     /// New Assignee User ID
     pub assignee_id: Option<i64>,
+    /// New Parent Work Package ID (to set or change parent work package)
+    pub parent_id: Option<i64>,
     /// Start date in ISO format YYYY-MM-DD
     pub start_date: Option<String>,
     /// Due date in ISO format YYYY-MM-DD

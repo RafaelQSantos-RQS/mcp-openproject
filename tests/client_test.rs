@@ -245,3 +245,43 @@ fn test_real_sample_wps_deserialize() {
         assert!(!col.embedded.elements.is_empty());
     }
 }
+
+#[tokio::test]
+async fn test_mock_create_work_package_with_parent() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "id": 101,
+        "lockVersion": 1,
+        "subject": "Child subtask",
+        "_links": {
+            "project": { "href": "/api/v3/projects/1", "title": "Project 1" },
+            "type": { "href": "/api/v3/types/1", "title": "Task" },
+            "parent": { "href": "/api/v3/work_packages/50", "title": "Parent Task" }
+        }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/api/v3/projects/1/work_packages"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let created = client
+        .create_work_package(CreateWorkPackageRequest {
+            project_id: 1,
+            type_id: 1,
+            subject: "Child subtask".into(),
+            parent_id: Some(50),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(created.id, 101);
+    assert_eq!(created.parent_id, Some(50));
+    assert_eq!(created.subject, "Child subtask");
+}

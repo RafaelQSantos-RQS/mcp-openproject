@@ -185,6 +185,13 @@ impl OpenProjectClient {
             );
         }
 
+        if let Some(parent_id) = req.parent_id {
+            links.insert(
+                "parent".into(),
+                json!({ "href": format!("/api/v3/work_packages/{}", parent_id) }),
+            );
+        }
+
         let mut body = json!({
             "subject": req.subject,
             "_links": links,
@@ -289,6 +296,13 @@ impl OpenProjectClient {
             links.insert(
                 "assignee".into(),
                 json!({ "href": format!("/api/v3/users/{}", aid) }),
+            );
+        }
+
+        if let Some(parent_id) = req.parent_id {
+            links.insert(
+                "parent".into(),
+                json!({ "href": format!("/api/v3/work_packages/{}", parent_id) }),
             );
         }
 
