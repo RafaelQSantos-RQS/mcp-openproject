@@ -285,3 +285,116 @@ async fn test_mock_create_work_package_with_parent() {
     assert_eq!(created.parent_id, Some(50));
     assert_eq!(created.subject, "Child subtask");
 }
+
+#[tokio::test]
+async fn test_mock_get_current_user() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "User",
+        "id": 8,
+        "name": "Rafael Queiroz Santos",
+        "login": "rafael_qsantos",
+        "admin": true,
+        "email": "rafael.santos@fieb.org.br",
+        "status": "active"
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/users/me"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let user = client.get_current_user().await.unwrap();
+    assert_eq!(user.id, 8);
+    assert_eq!(user.name, "Rafael Queiroz Santos");
+    assert_eq!(user.login, Some("rafael_qsantos".into()));
+    assert_eq!(user.email, Some("rafael.santos@fieb.org.br".into()));
+    assert!(user.admin);
+    assert_eq!(user.status, Some("active".into()));
+}
+
+#[tokio::test]
+async fn test_mock_list_project_assignees() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "Collection",
+        "total": 2,
+        "count": 2,
+        "_embedded": {
+            "elements": [
+                {
+                    "id": 8,
+                    "name": "Rafael Queiroz Santos",
+                    "email": "rafael.santos@fieb.org.br",
+                    "login": "rafael_qsantos",
+                    "admin": true,
+                    "status": "active"
+                },
+                {
+                    "id": 15,
+                    "name": "Alice Smith",
+                    "email": "alice@example.com",
+                    "login": "asmith",
+                    "admin": false,
+                    "status": "active"
+                }
+            ]
+        }
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/projects/10/available_assignees"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let assignees = client.list_project_assignees(10).await.unwrap();
+    assert_eq!(assignees.len(), 2);
+    assert_eq!(assignees[0].id, 8);
+    assert_eq!(assignees[0].name, "Rafael Queiroz Santos");
+    assert_eq!(assignees[1].id, 15);
+    assert_eq!(assignees[1].name, "Alice Smith");
+}
+
+#[tokio::test]
+async fn test_mock_add_project_member() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "Membership",
+        "id": 45,
+        "_links": {
+            "project": { "href": "/api/v3/projects/10", "title": "Demo Project" },
+            "principal": { "href": "/api/v3/users/8", "title": "Rafael Queiroz Santos" },
+            "roles": [
+                { "href": "/api/v3/roles/9", "title": "Member" }
+            ]
+        }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/api/v3/memberships"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let membership = client.add_project_member(10, 8, Some(9)).await.unwrap();
+    assert_eq!(membership.id, 45);
+    assert_eq!(membership.project_id, Some(10));
+    assert_eq!(membership.project_name, Some("Demo Project".into()));
+    assert_eq!(membership.user_id, Some(8));
+    assert_eq!(membership.user_name, Some("Rafael Queiroz Santos".into()));
+    assert_eq!(membership.roles, vec!["Member".to_string()]);
+}

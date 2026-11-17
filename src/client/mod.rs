@@ -6,9 +6,9 @@ use crate::config::Config;
 use error::OpenProjectError;
 use filters::WorkPackageFilterBuilder;
 use models::{
-    CreateWorkPackageRequest, HalCollection, HalProject, HalStatus, HalType, HalWorkPackage,
-    PaginatedResponse, ProjectSummary, StatusSummary, TypeSummary, UpdateWorkPackageRequest,
-    WorkPackageSummary,
+    CreateWorkPackageRequest, HalCollection, HalMembership, HalProject, HalStatus, HalType,
+    HalUser, HalWorkPackage, MembershipSummary, PaginatedResponse, ProjectSummary, StatusSummary,
+    TypeSummary, UpdateWorkPackageRequest, UserSummary, WorkPackageSummary,
 };
 use reqwest::{Method, RequestBuilder, Response, header};
 use serde_json::json;
@@ -343,5 +343,55 @@ impl OpenProjectClient {
         let body = Self::handle_response(resp).await?;
         let col: HalCollection<HalStatus> = serde_json::from_str(&body)?;
         Ok(col.embedded.elements.into_iter().map(Into::into).collect())
+    }
+
+    /// Retrieves information about the currently authenticated user (associated with the API key)
+    pub async fn get_current_user(&self) -> Result<UserSummary, OpenProjectError> {
+        let resp = self.request(Method::GET, "users/me").send().await?;
+        let body = Self::handle_response(resp).await?;
+        let user: HalUser = serde_json::from_str(&body)?;
+        Ok(user.into())
+    }
+
+    /// Lists users available to be assigned to work packages in a specific project
+    pub async fn list_project_assignees(
+        &self,
+        project_id: i64,
+    ) -> Result<Vec<UserSummary>, OpenProjectError> {
+        let path = format!("projects/{project_id}/available_assignees");
+        let resp = self.request(Method::GET, &path).send().await?;
+        let body = Self::handle_response(resp).await?;
+        let col: HalCollection<HalUser> = serde_json::from_str(&body)?;
+        Ok(col.embedded.elements.into_iter().map(Into::into).collect())
+    }
+
+    /// Adds a user as a member of a project with a role (default role_id is 9: Member)
+    pub async fn add_project_member(
+        &self,
+        project_id: i64,
+        user_id: i64,
+        role_id: Option<i64>,
+    ) -> Result<MembershipSummary, OpenProjectError> {
+        let role_id = role_id.unwrap_or(9);
+        let body = json!({
+            "_links": {
+                "project": { "href": format!("/api/v3/projects/{project_id}") },
+                "principal": { "href": format!("/api/v3/users/{user_id}") },
+                "roles": [
+                    { "href": format!("/api/v3/roles/{role_id}") }
+                ]
+            }
+        });
+
+        let resp = self
+            .request(Method::POST, "memberships")
+            .header(header::CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let resp_body = Self::handle_response(resp).await?;
+        let membership: HalMembership = serde_json::from_str(&resp_body)?;
+        Ok(membership.into())
     }
 }

@@ -8,13 +8,13 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[test]
-fn test_server_registers_all_8_tools() {
+fn test_server_registers_all_11_tools() {
     let config = Config::new("https://example.com".into(), "test-key".into()).unwrap();
     let client = OpenProjectClient::new(config).unwrap();
     let server = OpenProjectServer::new(client);
 
     let tools = server.router().list_all();
-    assert_eq!(tools.len(), 8);
+    assert_eq!(tools.len(), 11);
 
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
     assert!(names.contains(&"list_projects"));
@@ -25,6 +25,9 @@ fn test_server_registers_all_8_tools() {
     assert!(names.contains(&"update_work_package"));
     assert!(names.contains(&"list_types"));
     assert!(names.contains(&"list_statuses"));
+    assert!(names.contains(&"get_current_user"));
+    assert!(names.contains(&"list_project_assignees"));
+    assert!(names.contains(&"add_project_member"));
 }
 
 #[tokio::test]
@@ -105,4 +108,41 @@ async fn test_server_error_translates_to_tool_error() {
         }
         _ => panic!("Expected text content"),
     }
+}
+
+#[tokio::test]
+async fn test_server_get_current_user_tool() {
+    let mock_server = MockServer::start().await;
+
+    let user_body = json!({
+        "_type": "User",
+        "id": 8,
+        "name": "Rafael Queiroz Santos",
+        "login": "rafael_qsantos",
+        "admin": true,
+        "email": "rafael.santos@fieb.org.br",
+        "status": "active"
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/users/me"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(user_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+    let server = OpenProjectServer::new(client);
+
+    let result = server
+        .get_current_user(Parameters(Default::default()))
+        .await
+        .unwrap();
+
+    assert_eq!(result.is_error, Some(false));
+    assert!(result.structured_content.is_some());
+    let json_val = result.structured_content.unwrap();
+    assert_eq!(json_val["id"], 8);
+    assert_eq!(json_val["name"], "Rafael Queiroz Santos");
+    assert_eq!(json_val["admin"], true);
 }

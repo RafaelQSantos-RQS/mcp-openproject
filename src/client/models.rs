@@ -375,3 +375,105 @@ pub struct UpdateWorkPackageRequest {
     pub percentage_done: Option<i32>,
     pub custom_fields: Option<HashMap<String, serde_json::Value>>,
 }
+
+// -------------------------------------------------------------
+// Users
+// -------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct HalUser {
+    pub id: i64,
+    pub name: String,
+    pub email: Option<String>,
+    pub login: Option<String>,
+    pub admin: Option<bool>,
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct UserSummary {
+    pub id: i64,
+    pub name: String,
+    pub email: Option<String>,
+    pub login: Option<String>,
+    pub admin: bool,
+    pub status: Option<String>,
+}
+
+impl From<HalUser> for UserSummary {
+    fn from(u: HalUser) -> Self {
+        Self {
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            login: u.login,
+            admin: u.admin.unwrap_or(false),
+            status: u.status,
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// Memberships
+// -------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct HalMembership {
+    pub id: i64,
+    #[serde(rename = "_links", default)]
+    pub links: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct MembershipSummary {
+    pub id: i64,
+    pub project_id: Option<i64>,
+    pub project_name: Option<String>,
+    pub user_id: Option<i64>,
+    pub user_name: Option<String>,
+    pub roles: Vec<String>,
+}
+
+impl From<HalMembership> for MembershipSummary {
+    fn from(m: HalMembership) -> Self {
+        let extract_link = |key: &str| -> (Option<i64>, Option<String>) {
+            if let Some(obj) = m.links.get(key).and_then(|v| v.as_object()) {
+                let href = obj.get("href").and_then(|h| h.as_str());
+                let title = obj
+                    .get("title")
+                    .and_then(|t| t.as_str())
+                    .map(ToString::to_string);
+                let id = href.and_then(|h| {
+                    h.trim_end_matches('/')
+                        .rsplit('/')
+                        .next()?
+                        .parse::<i64>()
+                        .ok()
+                });
+                return (id, title);
+            }
+            (None, None)
+        };
+
+        let (project_id, project_name) = extract_link("project");
+        let (user_id, user_name) = extract_link("principal");
+
+        let mut roles = Vec::new();
+        if let Some(arr) = m.links.get("roles").and_then(|v| v.as_array()) {
+            for item in arr {
+                if let Some(title) = item.get("title").and_then(|t| t.as_str()) {
+                    roles.push(title.to_string());
+                }
+            }
+        }
+
+        Self {
+            id: m.id,
+            project_id,
+            project_name,
+            user_id,
+            user_name,
+            roles,
+        }
+    }
+}

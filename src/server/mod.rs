@@ -10,8 +10,9 @@ use rmcp::{
     tool, tool_handler, tool_router,
 };
 use tools::{
-    CreateWorkPackageParams, GetProjectParams, GetWorkPackageParams, ListProjectsParams,
-    ListStatusesParams, ListTypesParams, SearchWorkPackagesParams, UpdateWorkPackageParams,
+    AddProjectMemberParams, CreateWorkPackageParams, GetCurrentUserParams, GetProjectParams,
+    GetWorkPackageParams, ListProjectAssigneesParams, ListProjectsParams, ListStatusesParams,
+    ListTypesParams, SearchWorkPackagesParams, UpdateWorkPackageParams,
 };
 
 #[derive(Clone)]
@@ -227,6 +228,66 @@ impl OpenProjectServer {
             )),
             Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                 "Failed to list statuses: {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "get_current_user",
+        description = "Retrieve information about the currently authenticated user (associated with the API key), including ID, name, email, login, and admin status"
+    )]
+    pub async fn get_current_user(
+        &self,
+        _params: Parameters<GetCurrentUserParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.client.get_current_user().await {
+            Ok(user) => Ok(CallToolResult::structured(
+                serde_json::to_value(user).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to get current user: {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "list_project_assignees",
+        description = "List all users eligible to be assigned to work packages in a specific project"
+    )]
+    pub async fn list_project_assignees(
+        &self,
+        Parameters(params): Parameters<ListProjectAssigneesParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.client.list_project_assignees(params.project_id).await {
+            Ok(users) => Ok(CallToolResult::structured(
+                serde_json::to_value(users).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to list assignees for project #{}: {err}",
+                params.project_id
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "add_project_member",
+        description = "Add a user as a member of a project with a role (default role_id: 9 for 'Member'), enabling them to be assigned to work packages in that project"
+    )]
+    pub async fn add_project_member(
+        &self,
+        Parameters(params): Parameters<AddProjectMemberParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self
+            .client
+            .add_project_member(params.project_id, params.user_id, params.role_id)
+            .await
+        {
+            Ok(membership) => Ok(CallToolResult::structured(
+                serde_json::to_value(membership).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to add user #{} to project #{}: {err}",
+                params.user_id, params.project_id
             ))])),
         }
     }

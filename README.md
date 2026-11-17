@@ -17,7 +17,7 @@ Desenvolvido para permitir que assistentes de IA (Claude Desktop, Antigravity, C
 
 ---
 
-## 🛠️ Catálogo de Ferramentas (8 Tools)
+## 🛠️ Catálogo de Ferramentas (11 Tools)
 
 | Ferramenta | Descrição | Principais Parâmetros |
 | :--- | :--- | :--- |
@@ -25,10 +25,13 @@ Desenvolvido para permitir que assistentes de IA (Claude Desktop, Antigravity, C
 | `get_project` | Detalhes completos de um projeto | `id_or_identifier` |
 | `search_work_packages` | Pesquisa e filtra work packages (tarefas, bugs, épicos) | `query`, `project_id`, `type_id`, `status`, `assignee_id`, `page`, `page_size` |
 | `get_work_package` | Recupera detalhes completos de um work package por ID | `id` |
-| `create_work_package` | Cria um novo work package em um projeto (suporta subtarefas) | `project_id`, `type_id`, `subject`, `parent_id`, `description`, `status_id`, `priority_id`, `assignee_id`, `custom_fields` |
+| `create_work_package` | Cria um novo work package em um projeto (suporta subtarefas via `parent_id`) | `project_id`, `type_id`, `subject`, `parent_id`, `description`, `status_id`, `priority_id`, `assignee_id`, `custom_fields` |
 | `update_work_package` | Atualiza atributos de um work package existente | `id`, `parent_id`, `lock_version` (opcional), `subject`, `description`, `status_id`, `type_id`, etc. |
 | `list_types` | Lista os tipos de work packages suportados (Tarefa, Bug, etc.) | *(Nenhum)* |
 | `list_statuses` | Lista os status disponíveis no fluxo de trabalho | *(Nenhum)* |
+| `get_current_user` | Obtém dados do usuário autenticado pela API key (ID, nome, email, login, admin) | *(Nenhum)* |
+| `list_project_assignees` | Lista usuários elegíveis para receber atribuição de tarefas no projeto | `project_id` |
+| `add_project_member` | Associa um usuário a um projeto como membro com papel/role | `project_id`, `user_id`, `role_id` (opcional, padrão: 9 para 'Member') |
 
 ---
 

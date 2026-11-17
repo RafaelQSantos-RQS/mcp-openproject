@@ -109,3 +109,25 @@ pub struct ListTypesParams {}
 /// Parameters for listing statuses (empty)
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 pub struct ListStatusesParams {}
+
+/// Parameters for getting current authenticated user (empty)
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct GetCurrentUserParams {}
+
+/// Parameters for listing available assignees in a project
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ListProjectAssigneesParams {
+    /// Numeric Project ID to list eligible assignees for
+    pub project_id: i64,
+}
+
+/// Parameters for adding a member to a project
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AddProjectMemberParams {
+    /// Numeric Project ID to add the user to
+    pub project_id: i64,
+    /// Numeric User ID to add to the project
+    pub user_id: i64,
+    /// Optional Role ID for the membership (default: 9 for 'Member')
+    pub role_id: Option<i64>,
+}
