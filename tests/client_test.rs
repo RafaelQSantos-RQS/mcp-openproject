@@ -191,3 +191,57 @@ async fn test_mock_api_error_handling() {
     assert!(matches!(err, OpenProjectError::Validation(_)));
     assert!(err.to_string().contains("Subject can't be blank."));
 }
+
+#[tokio::test]
+async fn test_mock_get_work_package_with_array_links_and_formattable_custom_fields() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "id": 42,
+        "lockVersion": 1,
+        "subject": "Task with complex links",
+        "description": "Simple string description",
+        "_links": {
+            "project": { "href": "/api/v3/projects/9", "title": "Main Project" },
+            "targetVersions": [
+                { "href": "/api/v3/versions/5", "title": "v1.0" }
+            ],
+            "ancestors": [],
+            "customField11": []
+        },
+        "customField4": {
+            "format": "markdown",
+            "raw": "Formatted custom text",
+            "html": "<p>Formatted custom text</p>"
+        }
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/work_packages/42"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let wp = client.get_work_package(42).await.unwrap();
+    assert_eq!(wp.id, 42);
+    assert_eq!(wp.project_id, Some(9));
+    assert_eq!(wp.project_name, Some("Main Project".into()));
+    assert_eq!(wp.description, Some("Simple string description".into()));
+    assert_eq!(
+        wp.custom_fields.get("customField4"),
+        Some(&json!("Formatted custom text"))
+    );
+}
+
+#[test]
+fn test_real_sample_wps_deserialize() {
+    if let Ok(raw) = std::fs::read_to_string("target/sample_wps.json") {
+        let col: mcp_openproject::client::models::HalCollection<
+            mcp_openproject::client::models::HalWorkPackage,
+        > = serde_json::from_str(&raw).expect("failed to deserialize real sample wps");
+        assert!(!col.embedded.elements.is_empty());
+    }
+}

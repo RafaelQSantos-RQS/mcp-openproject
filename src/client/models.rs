@@ -21,17 +21,24 @@ impl HalLink {
     }
 }
 
-/// Formattable text (raw, html, markdown format)
+/// Formattable text (raw, html, markdown format, or raw string)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct HalFormattable {
-    pub raw: Option<String>,
-    pub html: Option<String>,
-    pub format: Option<String>,
+#[serde(untagged)]
+pub enum HalFormattable {
+    Structured {
+        raw: Option<String>,
+        html: Option<String>,
+        format: Option<String>,
+    },
+    Plain(String),
 }
 
 impl HalFormattable {
     pub fn as_text(&self) -> Option<String> {
-        self.raw.clone().or_else(|| self.html.clone())
+        match self {
+            Self::Structured { raw, html, .. } => raw.clone().or_else(|| html.clone()),
+            Self::Plain(s) => Some(s.clone()),
+        }
     }
 }
 
@@ -204,7 +211,7 @@ pub struct HalWorkPackage {
     #[serde(rename = "updatedAt")]
     pub updated_at: Option<String>,
     #[serde(rename = "_links", default)]
-    pub links: HashMap<String, Option<HalLink>>,
+    pub links: HashMap<String, serde_json::Value>,
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
 }
@@ -240,12 +247,37 @@ pub struct WorkPackageSummary {
 
 impl From<HalWorkPackage> for WorkPackageSummary {
     fn from(wp: HalWorkPackage) -> Self {
+        let extract_from_link_obj =
+            |obj: &serde_json::Map<String, serde_json::Value>| -> (Option<i64>, Option<String>) {
+                let href = obj.get("href").and_then(|h| h.as_str());
+                let title = obj
+                    .get("title")
+                    .and_then(|t| t.as_str())
+                    .map(ToString::to_string);
+                let id = href.and_then(|h| {
+                    h.trim_end_matches('/')
+                        .rsplit('/')
+                        .next()?
+                        .parse::<i64>()
+                        .ok()
+                });
+                (id, title)
+            };
+
         let get_link_info = |key: &str| -> (Option<i64>, Option<String>) {
-            if let Some(Some(link)) = wp.links.get(key) {
-                (link.extract_id(), link.title.clone())
-            } else {
-                (None, None)
+            if let Some(val) = wp.links.get(key) {
+                if let Some(obj) = val.as_object() {
+                    return extract_from_link_obj(obj);
+                }
+                if let Some(first_obj) = val
+                    .as_array()
+                    .and_then(|arr| arr.first())
+                    .and_then(|item| item.as_object())
+                {
+                    return extract_from_link_obj(first_obj);
+                }
             }
+            (None, None)
         };
 
         let (project_id, project_name) = get_link_info("project");
@@ -256,11 +288,26 @@ impl From<HalWorkPackage> for WorkPackageSummary {
         let (author_id, author_name) = get_link_info("author");
         let (parent_id, _) = get_link_info("parent");
 
-        // Collect custom fields (customField1, customField2, etc.)
+        // Collect custom fields from extra properties
         let mut custom_fields = HashMap::new();
         for (k, v) in wp.extra {
             if k.starts_with("customField") && !v.is_null() {
-                custom_fields.insert(k, v);
+                if let Some(raw_text) = v.get("raw").and_then(|r| r.as_str()) {
+                    custom_fields.insert(k, serde_json::Value::String(raw_text.to_string()));
+                } else {
+                    custom_fields.insert(k, v);
+                }
+            }
+        }
+
+        // Also check if any customField is inside _links (e.g. list/user custom fields)
+        for (k, v) in &wp.links {
+            if k.starts_with("customField") && !v.is_null() && !custom_fields.contains_key(k) {
+                if let Some(title) = v.get("title").and_then(|t| t.as_str()) {
+                    custom_fields.insert(k.clone(), serde_json::Value::String(title.to_string()));
+                } else if let Some(href) = v.get("href").and_then(|h| h.as_str()) {
+                    custom_fields.insert(k.clone(), serde_json::Value::String(href.to_string()));
+                }
             }
         }
 
