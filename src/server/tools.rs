@@ -31,6 +31,8 @@ pub struct SearchWorkPackagesParams {
     pub status: Option<String>,
     /// Filter by Assignee (User ID)
     pub assignee_id: Option<i64>,
+    /// Filter by Sprint ID
+    pub sprint_id: Option<i64>,
     /// Page number (1-based, default: 1)
     pub page: Option<usize>,
     /// Number of items per page (default: 20, max: 100)
@@ -63,6 +65,8 @@ pub struct CreateWorkPackageParams {
     pub assignee_id: Option<i64>,
     /// Optional Parent Work Package ID (creates this work package as a child/subtask)
     pub parent_id: Option<i64>,
+    /// Optional Sprint ID to assign this work package to a sprint
+    pub sprint_id: Option<i64>,
     /// Start date in ISO format YYYY-MM-DD
     pub start_date: Option<String>,
     /// Due date in ISO format YYYY-MM-DD
@@ -98,6 +102,8 @@ pub struct UpdateWorkPackageParams {
     pub assignee_id: Option<i64>,
     /// New Parent Work Package ID (to set or change parent work package)
     pub parent_id: Option<i64>,
+    /// New Sprint ID (or 0 / negative to remove from sprint)
+    pub sprint_id: Option<i64>,
     /// Start date in ISO format YYYY-MM-DD
     pub start_date: Option<String>,
     /// Due date in ISO format YYYY-MM-DD
@@ -166,4 +172,18 @@ pub struct LogTimeParams {
     pub activity_id: Option<i64>,
     /// Optional user ID who performed the work (defaults to the authenticated user)
     pub user_id: Option<i64>,
+}
+
+/// Parameters for listing sprints
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct ListSprintsParams {
+    /// Optional Project ID to list sprints belonging to that project
+    pub project_id: Option<i64>,
+}
+
+/// Parameters for getting sprint details
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct GetSprintParams {
+    /// Numeric Sprint ID
+    pub id: i64,
 }

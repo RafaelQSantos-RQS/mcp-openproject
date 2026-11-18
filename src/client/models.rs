@@ -239,6 +239,8 @@ pub struct WorkPackageSummary {
     pub author_id: Option<i64>,
     pub author_name: Option<String>,
     pub parent_id: Option<i64>,
+    pub sprint_id: Option<i64>,
+    pub sprint_name: Option<String>,
     pub start_date: Option<String>,
     pub due_date: Option<String>,
     pub estimated_time: Option<String>,
@@ -293,6 +295,7 @@ impl From<HalWorkPackage> for WorkPackageSummary {
         let (assignee_id, assignee_name) = get_link_info("assignee");
         let (author_id, author_name) = get_link_info("author");
         let (parent_id, _) = get_link_info("parent");
+        let (sprint_id, sprint_name) = get_link_info("sprint");
 
         // Collect custom fields from extra properties
         let mut custom_fields = HashMap::new();
@@ -335,6 +338,8 @@ impl From<HalWorkPackage> for WorkPackageSummary {
             author_id,
             author_name,
             parent_id,
+            sprint_id,
+            sprint_name,
             start_date: wp.start_date,
             due_date: wp.due_date,
             estimated_time: wp.estimated_time,
@@ -362,6 +367,7 @@ pub struct CreateWorkPackageRequest {
     pub priority_id: Option<i64>,
     pub assignee_id: Option<i64>,
     pub parent_id: Option<i64>,
+    pub sprint_id: Option<i64>,
     pub start_date: Option<String>,
     pub due_date: Option<String>,
     pub estimated_time: Option<String>,
@@ -381,6 +387,7 @@ pub struct UpdateWorkPackageRequest {
     pub priority_id: Option<i64>,
     pub assignee_id: Option<i64>,
     pub parent_id: Option<i64>,
+    pub sprint_id: Option<i64>,
     pub start_date: Option<String>,
     pub due_date: Option<String>,
     pub estimated_time: Option<String>,
@@ -605,4 +612,88 @@ pub struct CreateTimeEntryRequest {
     pub spent_on: Option<String>,
     pub activity_id: Option<i64>,
     pub user_id: Option<i64>,
+}
+
+// -------------------------------------------------------------
+// Sprints
+// -------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct HalSprint {
+    pub id: i64,
+    pub name: String,
+    #[serde(rename = "startDate")]
+    pub start_date: Option<String>,
+    #[serde(rename = "finishDate")]
+    pub finish_date: Option<String>,
+    #[serde(rename = "startedAt")]
+    pub started_at: Option<String>,
+    #[serde(rename = "completedAt")]
+    pub completed_at: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: Option<String>,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: Option<String>,
+    #[serde(rename = "_links", default)]
+    pub links: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SprintSummary {
+    pub id: i64,
+    pub name: String,
+    pub start_date: Option<String>,
+    pub finish_date: Option<String>,
+    pub status: Option<String>,
+    pub project_id: Option<i64>,
+    pub project_name: Option<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+impl From<HalSprint> for SprintSummary {
+    fn from(s: HalSprint) -> Self {
+        let status = s.links.get("status").and_then(|val| {
+            val.get("title")
+                .and_then(|t| t.as_str())
+                .map(ToString::to_string)
+                .or_else(|| {
+                    val.get("href")
+                        .and_then(|h| h.as_str())
+                        .and_then(|h| h.rsplit(':').next().map(ToString::to_string))
+                })
+        });
+
+        let (project_id, project_name) =
+            match s.links.get("definingWorkspace").and_then(|v| v.as_object()) {
+                Some(obj) => {
+                    let href = obj.get("href").and_then(|h| h.as_str());
+                    let title = obj
+                        .get("title")
+                        .and_then(|t| t.as_str())
+                        .map(ToString::to_string);
+                    let id = href.and_then(|h| {
+                        h.trim_end_matches('/')
+                            .rsplit('/')
+                            .next()?
+                            .parse::<i64>()
+                            .ok()
+                    });
+                    (id, title)
+                }
+                None => (None, None),
+            };
+
+        Self {
+            id: s.id,
+            name: s.name,
+            start_date: s.start_date,
+            finish_date: s.finish_date,
+            status,
+            project_id,
+            project_name,
+            created_at: s.created_at,
+            updated_at: s.updated_at,
+        }
+    }
 }

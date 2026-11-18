@@ -17,16 +17,16 @@ Desenvolvido para permitir que assistentes de IA (Claude Desktop, Antigravity, C
 
 ---
 
-## 🛠️ Catálogo de Ferramentas (13 Tools)
+## 🛠️ Catálogo de Ferramentas (15 Tools)
 
 | Ferramenta | Descrição | Principais Parâmetros |
 | :--- | :--- | :--- |
 | `list_projects` | Lista projetos acessíveis com suporte a paginação | `page`, `page_size` |
 | `get_project` | Detalhes completos de um projeto | `id_or_identifier` |
-| `search_work_packages` | Pesquisa e filtra work packages (tarefas, bugs, épicos) | `query`, `project_id`, `type_id`, `status`, `assignee_id`, `page`, `page_size` |
-| `get_work_package` | Recupera detalhes completos de um work package por ID (incluindo progresso, estimativas e tempo gasto) | `id` |
-| `create_work_package` | Cria um novo work package (suporta subtarefas via `parent_id`, estimativa, trabalho restante e % concluído) | `project_id`, `type_id`, `subject`, `parent_id`, `estimated_time`, `remaining_time`, `percentage_done`, `description`, `status_id`, `priority_id`, `assignee_id`, `custom_fields` |
-| `update_work_package` | Atualiza atributos de um work package existente (progresso, estimativa, trabalho restante, etc.) | `id`, `parent_id`, `lock_version` (opcional), `estimated_time`, `remaining_time`, `percentage_done`, `subject`, `description`, `status_id`, `type_id`, etc. |
+| `search_work_packages` | Pesquisa e filtra work packages (tarefas, bugs, épicos) | `query`, `project_id`, `type_id`, `status`, `assignee_id`, `sprint_id`, `page`, `page_size` |
+| `get_work_package` | Recupera detalhes completos de um work package por ID (incluindo progresso, estimativas, sprint e tempo gasto) | `id` |
+| `create_work_package` | Cria um novo work package (suporta subtarefas via `parent_id`, alocação em `sprint_id`, estimativa, trabalho restante e % concluído) | `project_id`, `type_id`, `subject`, `parent_id`, `sprint_id`, `estimated_time`, `remaining_time`, `percentage_done`, `description`, `status_id`, `priority_id`, `assignee_id`, `custom_fields` |
+| `update_work_package` | Atualiza atributos de um work package existente (alocação em `sprint_id`, progresso, estimativa, trabalho restante, etc.) | `id`, `parent_id`, `sprint_id` (0 para desassociar), `lock_version` (opcional), `estimated_time`, `remaining_time`, `percentage_done`, `subject`, `description`, `status_id`, `type_id`, etc. |
 | `list_types` | Lista os tipos de work packages suportados (Tarefa, Bug, etc.) | *(Nenhum)* |
 | `list_statuses` | Lista os status disponíveis no fluxo de trabalho | *(Nenhum)* |
 | `get_current_user` | Obtém dados do usuário autenticado pela API key (ID, nome, email, login, admin) | *(Nenhum)* |
@@ -34,6 +34,8 @@ Desenvolvido para permitir que assistentes de IA (Claude Desktop, Antigravity, C
 | `add_project_member` | Associa um usuário a um projeto como membro com papel/role | `project_id`, `user_id`, `role_id` (opcional, padrão: 9 para 'Member') |
 | `list_time_entry_activities` | Lista as atividades disponíveis para lançamento de horas (ex: Development, Specification) | `project_id` (opcional), `work_package_id` (opcional) |
 | `log_time` | Lança horas gastas em uma tarefa (apontamento de tempo com recálculo automático de `spentTime`) | `work_package_id`, `hours` (ex: `'2h'`, `'1.5h'`, `'30m'`, `'PT2H'`), `comment`, `spent_on`, `activity_id`, `user_id` |
+| `list_sprints` | Lista sprints cadastrados, com suporte a filtro por projeto | `project_id` (opcional) |
+| `get_sprint` | Obtém detalhes de um sprint por ID (nome, status, datas de início/fim e projeto definidor) | `id` |
 
 > 💡 **Formatos de Duração Amigáveis:**
 > O servidor converte automaticamente formatos comuns de duração para o padrão ISO 8601 do OpenProject:

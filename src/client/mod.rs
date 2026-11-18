@@ -9,9 +9,10 @@ use error::OpenProjectError;
 use filters::WorkPackageFilterBuilder;
 use models::{
     CreateTimeEntryRequest, CreateWorkPackageRequest, HalCollection, HalMembership, HalProject,
-    HalStatus, HalTimeEntry, HalTimeEntryActivity, HalType, HalUser, HalWorkPackage,
-    MembershipSummary, PaginatedResponse, ProjectSummary, StatusSummary, TimeEntryActivitySummary,
-    TimeEntrySummary, TypeSummary, UpdateWorkPackageRequest, UserSummary, WorkPackageSummary,
+    HalSprint, HalStatus, HalTimeEntry, HalTimeEntryActivity, HalType, HalUser, HalWorkPackage,
+    MembershipSummary, PaginatedResponse, ProjectSummary, SprintSummary, StatusSummary,
+    TimeEntryActivitySummary, TimeEntrySummary, TypeSummary, UpdateWorkPackageRequest, UserSummary,
+    WorkPackageSummary,
 };
 use reqwest::{Method, RequestBuilder, Response, header};
 use serde_json::json;
@@ -195,6 +196,17 @@ impl OpenProjectClient {
             );
         }
 
+        if let Some(sprint_id) = req.sprint_id {
+            if sprint_id > 0 {
+                links.insert(
+                    "sprint".into(),
+                    json!({ "href": format!("/api/v3/sprints/{sprint_id}") }),
+                );
+            } else {
+                links.insert("sprint".into(), json!({ "href": null }));
+            }
+        }
+
         let mut body = json!({
             "subject": req.subject,
             "_links": links,
@@ -331,6 +343,17 @@ impl OpenProjectClient {
                 "parent".into(),
                 json!({ "href": format!("/api/v3/work_packages/{}", parent_id) }),
             );
+        }
+
+        if let Some(sprint_id) = req.sprint_id {
+            if sprint_id > 0 {
+                links.insert(
+                    "sprint".into(),
+                    json!({ "href": format!("/api/v3/sprints/{sprint_id}") }),
+                );
+            } else {
+                links.insert("sprint".into(), json!({ "href": null }));
+            }
         }
 
         if !links.is_empty() {
@@ -523,5 +546,36 @@ impl OpenProjectClient {
         let resp_body = Self::handle_response(resp).await?;
         let time_entry: HalTimeEntry = serde_json::from_str(&resp_body)?;
         Ok(time_entry.into())
+    }
+
+    /// Lists sprints, optionally filtered by project ID
+    pub async fn list_sprints(
+        &self,
+        project_id: Option<i64>,
+    ) -> Result<Vec<SprintSummary>, OpenProjectError> {
+        let mut req = self.request(Method::GET, "sprints");
+        if let Some(pid) = project_id {
+            let filter = json!([{
+                "definingWorkspace": {
+                    "operator": "=",
+                    "values": [pid.to_string()]
+                }
+            }]);
+            req = req.query(&[("filters", filter.to_string())]);
+        }
+
+        let resp = req.send().await?;
+        let body = Self::handle_response(resp).await?;
+        let col: HalCollection<HalSprint> = serde_json::from_str(&body)?;
+        Ok(col.embedded.elements.into_iter().map(Into::into).collect())
+    }
+
+    /// Retrieves details of a specific sprint by ID
+    pub async fn get_sprint(&self, id: i64) -> Result<SprintSummary, OpenProjectError> {
+        let path = format!("sprints/{id}");
+        let resp = self.request(Method::GET, &path).send().await?;
+        let body = Self::handle_response(resp).await?;
+        let sprint: HalSprint = serde_json::from_str(&body)?;
+        Ok(sprint.into())
     }
 }

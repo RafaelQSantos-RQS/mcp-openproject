@@ -13,9 +13,9 @@ use rmcp::{
 };
 use tools::{
     AddProjectMemberParams, CreateWorkPackageParams, GetCurrentUserParams, GetProjectParams,
-    GetWorkPackageParams, ListProjectAssigneesParams, ListProjectsParams, ListStatusesParams,
-    ListTimeEntryActivitiesParams, ListTypesParams, LogTimeParams, SearchWorkPackagesParams,
-    UpdateWorkPackageParams,
+    GetSprintParams, GetWorkPackageParams, ListProjectAssigneesParams, ListProjectsParams,
+    ListSprintsParams, ListStatusesParams, ListTimeEntryActivitiesParams, ListTypesParams,
+    LogTimeParams, SearchWorkPackagesParams, UpdateWorkPackageParams,
 };
 
 #[derive(Clone)]
@@ -94,7 +94,8 @@ impl OpenProjectServer {
             .with_project_id(params.project_id)
             .with_type_id(params.type_id)
             .with_status(params.status.as_deref())
-            .with_assignee_id(params.assignee_id);
+            .with_assignee_id(params.assignee_id)
+            .with_sprint_id(params.sprint_id);
 
         let page = params.page.unwrap_or(1);
         let page_size = params.page_size.unwrap_or(20);
@@ -149,6 +150,7 @@ impl OpenProjectServer {
             priority_id: params.priority_id,
             assignee_id: params.assignee_id,
             parent_id: params.parent_id,
+            sprint_id: params.sprint_id,
             start_date: params.start_date,
             due_date: params.due_date,
             estimated_time: params.estimated_time,
@@ -186,6 +188,7 @@ impl OpenProjectServer {
             priority_id: params.priority_id,
             assignee_id: params.assignee_id,
             parent_id: params.parent_id,
+            sprint_id: params.sprint_id,
             start_date: params.start_date,
             due_date: params.due_date,
             estimated_time: params.estimated_time,
@@ -346,6 +349,43 @@ impl OpenProjectServer {
             )),
             Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                 "Failed to log time on work package #{wp_id}: {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "list_sprints",
+        description = "List sprints, optionally filtered by project ID. Returns sprint details including ID, name, status, dates, and defining project."
+    )]
+    pub async fn list_sprints(
+        &self,
+        Parameters(params): Parameters<ListSprintsParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.client.list_sprints(params.project_id).await {
+            Ok(sprints) => Ok(CallToolResult::structured(
+                serde_json::to_value(sprints).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to list sprints: {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "get_sprint",
+        description = "Retrieve details of a specific sprint by ID (including name, status, dates, and defining project)"
+    )]
+    pub async fn get_sprint(
+        &self,
+        Parameters(params): Parameters<GetSprintParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.client.get_sprint(params.id).await {
+            Ok(sprint) => Ok(CallToolResult::structured(
+                serde_json::to_value(sprint).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to get sprint #{}: {err}",
+                params.id
             ))])),
         }
     }

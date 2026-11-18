@@ -104,6 +104,19 @@ impl WorkPackageFilterBuilder {
         self
     }
 
+    /// Filter by Sprint ID
+    pub fn with_sprint_id(mut self, sprint_id: Option<i64>) -> Self {
+        if let Some(id) = sprint_id {
+            self.filters.push(json!({
+                "sprint": {
+                    "operator": "=",
+                    "values": [id.to_string()]
+                }
+            }));
+        }
+        self
+    }
+
     /// Checks if any filters are set
     pub fn is_empty(&self) -> bool {
         self.filters.is_empty()
@@ -146,5 +159,12 @@ mod tests {
         let builder = WorkPackageFilterBuilder::new().with_status(Some("open"));
         let query = builder.to_query_string().unwrap();
         assert!(query.contains("\"status\":{\"operator\":\"o\",\"values\":[]}"));
+    }
+
+    #[test]
+    fn test_sprint_filter() {
+        let builder = WorkPackageFilterBuilder::new().with_sprint_id(Some(75));
+        let query = builder.to_query_string().unwrap();
+        assert!(query.contains("\"sprint\":{\"operator\":\"=\",\"values\":[\"75\"]}"));
     }
 }

@@ -542,3 +542,130 @@ async fn test_mock_log_time() {
     assert_eq!(entry.work_package_id, Some(102));
     assert_eq!(entry.activity_id, Some(3));
 }
+
+#[tokio::test]
+async fn test_mock_list_sprints() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "Collection",
+        "total": 1,
+        "count": 1,
+        "_embedded": {
+            "elements": [
+                {
+                    "_type": "Sprint",
+                    "id": 75,
+                    "name": "Sprint 1",
+                    "startDate": "2026-11-18",
+                    "finishDate": "2026-12-02",
+                    "_links": {
+                        "status": {
+                            "href": "urn:openproject-org:api:v3:sprints:status:in_planning",
+                            "title": "Em planejamento"
+                        },
+                        "definingWorkspace": {
+                            "href": "/api/v3/projects/118",
+                            "title": "Status Report"
+                        }
+                    }
+                }
+            ]
+        }
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/sprints"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let sprints = client.list_sprints(None).await.unwrap();
+    assert_eq!(sprints.len(), 1);
+    assert_eq!(sprints[0].id, 75);
+    assert_eq!(sprints[0].name, "Sprint 1");
+    assert_eq!(sprints[0].status, Some("Em planejamento".into()));
+    assert_eq!(sprints[0].project_id, Some(118));
+    assert_eq!(sprints[0].project_name, Some("Status Report".into()));
+    assert_eq!(sprints[0].start_date, Some("2026-11-18".into()));
+}
+
+#[tokio::test]
+async fn test_mock_get_sprint() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "Sprint",
+        "id": 75,
+        "name": "Sprint 1",
+        "startDate": "2026-11-18",
+        "_links": {
+            "status": {
+                "href": "urn:openproject-org:api:v3:sprints:status:active",
+                "title": "Ativo"
+            },
+            "definingWorkspace": {
+                "href": "/api/v3/projects/118",
+                "title": "Status Report"
+            }
+        }
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/sprints/75"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let sprint = client.get_sprint(75).await.unwrap();
+    assert_eq!(sprint.id, 75);
+    assert_eq!(sprint.name, "Sprint 1");
+    assert_eq!(sprint.status, Some("Ativo".into()));
+    assert_eq!(sprint.project_id, Some(118));
+}
+
+#[tokio::test]
+async fn test_mock_create_work_package_with_sprint() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "id": 105,
+        "lockVersion": 1,
+        "subject": "Task in Sprint 1",
+        "_links": {
+            "project": { "href": "/api/v3/projects/118", "title": "Status Report" },
+            "type": { "href": "/api/v3/types/1", "title": "Task" },
+            "sprint": { "href": "/api/v3/sprints/75", "title": "Sprint 1" }
+        }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/api/v3/projects/118/work_packages"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let created = client
+        .create_work_package(mcp_openproject::client::models::CreateWorkPackageRequest {
+            project_id: 118,
+            type_id: 1,
+            subject: "Task in Sprint 1".into(),
+            sprint_id: Some(75),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(created.id, 105);
+    assert_eq!(created.sprint_id, Some(75));
+    assert_eq!(created.sprint_name, Some("Sprint 1".into()));
+}
