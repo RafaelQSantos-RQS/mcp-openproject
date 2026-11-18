@@ -47,6 +47,28 @@ Desenvolvido para permitir que assistentes de IA (Claude Desktop, Antigravity, C
 
 ---
 
+## 📥 Instalação Rápida (Binários Pré-compilados)
+
+Baixe, descompacte e instale a versão mais recente diretamente em `~/.local/bin/` com um único comando:
+
+### Linux (x86_64)
+```bash
+mkdir -p ~/.local/bin && \
+  curl -sL https://github.com/RafaelQSantos-RQS/mcp-openproject/releases/latest/download/mcp-openproject-linux-x86_64.tar.gz | tar -xz -C ~/.local/bin && \
+  chmod +x ~/.local/bin/mcp-openproject
+```
+
+### macOS (Apple Silicon - ARM64)
+```bash
+mkdir -p ~/.local/bin && \
+  curl -sL https://github.com/RafaelQSantos-RQS/mcp-openproject/releases/latest/download/mcp-openproject-macos-arm64.tar.gz | tar -xz -C ~/.local/bin && \
+  chmod +x ~/.local/bin/mcp-openproject
+```
+
+> 💡 Certifique-se de que `~/.local/bin` esteja no seu `$PATH` (padrão moderno na maioria dos ambientes Linux e macOS).
+
+---
+
 ## ⚙️ Configuração
 
 O servidor pode ser configurado por variáveis de ambiente ou através de um arquivo `.env` na raiz:
@@ -68,13 +90,11 @@ OPENPROJECT_API_KEY="seu_token_api_aqui"
 Para testar a conectividade com sua instância do OpenProject antes de usá-lo com agentes de IA:
 
 ```bash
+# Usando o binário instalado em ~/.local/bin
+~/.local/bin/mcp-openproject --test-connection
+
+# Ou a partir do código-fonte compilado
 cargo run -- --test-connection
-```
-
-Ou usando o binário compilado:
-
-```bash
-./target/release/mcp-openproject --test-connection
 ```
 
 Se as credenciais estiverem corretas, você verá uma mensagem de confirmação em `stderr`:
@@ -86,15 +106,15 @@ Successfully connected to OpenProject at https://seu-openproject.exemplo.com
 
 ## 🤖 Integração com Clientes MCP
 
-### Claude Desktop
+### Claude Desktop / Cursor / Antigravity
 
-Adicione ao seu `claude_desktop_config.json`:
+Adicione à configuração de servidores MCP (ex: `claude_desktop_config.json` ou arquivo de settings do seu assistente):
 
 ```json
 {
   "mcpServers": {
     "openproject": {
-      "command": "/caminho/absoluto/para/mcp-openproject/target/release/mcp-openproject",
+      "command": "mcp-openproject",
       "env": {
         "OPENPROJECT_URL": "https://seu-openproject.exemplo.com",
         "OPENPROJECT_API_KEY": "seu_token_aqui"
@@ -103,6 +123,9 @@ Adicione ao seu `claude_desktop_config.json`:
   }
 }
 ```
+
+> 💡 Se `mcp-openproject` não estiver no `PATH` do aplicativo, utilize o caminho absoluto:
+> `"command": "/home/SEU_USUARIO/.local/bin/mcp-openproject"` (ex: `/home/rafael_qsantos/.local/bin/mcp-openproject`).
 
 ---
 
