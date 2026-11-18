@@ -398,3 +398,147 @@ async fn test_mock_add_project_member() {
     assert_eq!(membership.user_name, Some("Rafael Queiroz Santos".into()));
     assert_eq!(membership.roles, vec!["Member".to_string()]);
 }
+
+#[tokio::test]
+async fn test_mock_create_work_package_with_time_and_percentage() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "id": 102,
+        "lockVersion": 1,
+        "subject": "Task with time and percentage",
+        "estimatedTime": "PT4H",
+        "remainingTime": "PT2H30M",
+        "spentTime": "PT1H",
+        "percentageDone": 25,
+        "_links": {
+            "project": { "href": "/api/v3/projects/1", "title": "Project 1" },
+            "type": { "href": "/api/v3/types/1", "title": "Task" }
+        }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/api/v3/projects/1/work_packages"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let created = client
+        .create_work_package(CreateWorkPackageRequest {
+            project_id: 1,
+            type_id: 1,
+            subject: "Task with time and percentage".into(),
+            estimated_time: Some("4h".into()),
+            remaining_time: Some("2.5h".into()),
+            percentage_done: Some(25),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(created.id, 102);
+    assert_eq!(created.estimated_time, Some("PT4H".into()));
+    assert_eq!(created.remaining_time, Some("PT2H30M".into()));
+    assert_eq!(created.spent_time, Some("PT1H".into()));
+    assert_eq!(created.percentage_done, Some(25));
+}
+
+#[tokio::test]
+async fn test_mock_list_time_entry_activities() {
+    let mock_server = MockServer::start().await;
+
+    let form_body = json!({
+        "_type": "TimeEntryForm",
+        "_embedded": {
+            "schema": {
+                "activity": {
+                    "_embedded": {
+                        "allowedValues": [
+                            {
+                                "id": 3,
+                                "name": "Development",
+                                "default": true
+                            },
+                            {
+                                "id": 4,
+                                "name": "Testing",
+                                "default": false
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/api/v3/time_entries/form"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(form_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let activities = client
+        .list_time_entry_activities(Some(10), None)
+        .await
+        .unwrap();
+    assert_eq!(activities.len(), 2);
+    assert_eq!(activities[0].id, 3);
+    assert_eq!(activities[0].name, "Development");
+    assert!(activities[0].is_default);
+    assert_eq!(activities[1].id, 4);
+    assert_eq!(activities[1].name, "Testing");
+    assert!(!activities[1].is_default);
+}
+
+#[tokio::test]
+async fn test_mock_log_time() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "TimeEntry",
+        "id": 500,
+        "hours": "PT2H",
+        "spentOn": "2026-11-17",
+        "comment": {
+            "raw": "Implemented feature"
+        },
+        "_links": {
+            "workPackage": { "href": "/api/v3/work_packages/102", "title": "My Task" },
+            "activity": { "href": "/api/v3/time_entries/activities/3", "title": "Development" }
+        }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/api/v3/time_entries"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let entry = client
+        .log_time(mcp_openproject::client::models::CreateTimeEntryRequest {
+            work_package_id: 102,
+            hours: "2h".into(),
+            comment: Some("Implemented feature".into()),
+            spent_on: Some("2026-11-17".into()),
+            activity_id: Some(3),
+            user_id: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(entry.id, 500);
+    assert_eq!(entry.hours, "PT2H");
+    assert_eq!(entry.spent_on, "2026-11-17");
+    assert_eq!(entry.comment, Some("Implemented feature".into()));
+    assert_eq!(entry.work_package_id, Some(102));
+    assert_eq!(entry.activity_id, Some(3));
+}

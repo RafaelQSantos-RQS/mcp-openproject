@@ -67,6 +67,12 @@ pub struct CreateWorkPackageParams {
     pub start_date: Option<String>,
     /// Due date in ISO format YYYY-MM-DD
     pub due_date: Option<String>,
+    /// Estimated time / total work (e.g. '4h', '2.5h', '30m', 'PT4H')
+    pub estimated_time: Option<String>,
+    /// Remaining work time (e.g. '2h', '1h30m', 'PT2H')
+    pub remaining_time: Option<String>,
+    /// Percentage completed (0 - 100)
+    pub percentage_done: Option<i32>,
     /// Custom fields key-value map (e.g. {"customField1": "value"})
     pub custom_fields: Option<HashMap<String, serde_json::Value>>,
 }
@@ -96,6 +102,10 @@ pub struct UpdateWorkPackageParams {
     pub start_date: Option<String>,
     /// Due date in ISO format YYYY-MM-DD
     pub due_date: Option<String>,
+    /// Estimated time / total work (e.g. '4h', '2.5h', '30m', 'PT4H')
+    pub estimated_time: Option<String>,
+    /// Remaining work time (e.g. '2h', '1h30m', 'PT2H')
+    pub remaining_time: Option<String>,
     /// Percentage completed (0 - 100)
     pub percentage_done: Option<i32>,
     /// Custom fields key-value map
@@ -130,4 +140,30 @@ pub struct AddProjectMemberParams {
     pub user_id: i64,
     /// Optional Role ID for the membership (default: 9 for 'Member')
     pub role_id: Option<i64>,
+}
+
+/// Parameters for listing available time entry activities
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct ListTimeEntryActivitiesParams {
+    /// Optional Project ID to discover activities available in that project
+    pub project_id: Option<i64>,
+    /// Optional Work Package ID to discover activities available for that work package
+    pub work_package_id: Option<i64>,
+}
+
+/// Parameters for logging spent time on a work package
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct LogTimeParams {
+    /// Work package ID to log time against
+    pub work_package_id: i64,
+    /// Amount of time spent (e.g. '2h', '1.5h', '30m', '02:30', or 'PT2H')
+    pub hours: String,
+    /// Optional comment or description of the work performed
+    pub comment: Option<String>,
+    /// Optional date when the work was performed in YYYY-MM-DD format (defaults to current date)
+    pub spent_on: Option<String>,
+    /// Optional activity ID (e.g. Development, Specification). Use `list_time_entry_activities` to discover.
+    pub activity_id: Option<i64>,
+    /// Optional user ID who performed the work (defaults to the authenticated user)
+    pub user_id: Option<i64>,
 }

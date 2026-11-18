@@ -2,7 +2,9 @@ pub mod tools;
 
 use crate::client::OpenProjectClient;
 use crate::client::filters::WorkPackageFilterBuilder;
-use crate::client::models::{CreateWorkPackageRequest, UpdateWorkPackageRequest};
+use crate::client::models::{
+    CreateTimeEntryRequest, CreateWorkPackageRequest, UpdateWorkPackageRequest,
+};
 use rmcp::{
     ErrorData, ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -12,7 +14,8 @@ use rmcp::{
 use tools::{
     AddProjectMemberParams, CreateWorkPackageParams, GetCurrentUserParams, GetProjectParams,
     GetWorkPackageParams, ListProjectAssigneesParams, ListProjectsParams, ListStatusesParams,
-    ListTypesParams, SearchWorkPackagesParams, UpdateWorkPackageParams,
+    ListTimeEntryActivitiesParams, ListTypesParams, LogTimeParams, SearchWorkPackagesParams,
+    UpdateWorkPackageParams,
 };
 
 #[derive(Clone)]
@@ -148,6 +151,9 @@ impl OpenProjectServer {
             parent_id: params.parent_id,
             start_date: params.start_date,
             due_date: params.due_date,
+            estimated_time: params.estimated_time,
+            remaining_time: params.remaining_time,
+            percentage_done: params.percentage_done,
             custom_fields: params.custom_fields,
         };
 
@@ -182,6 +188,8 @@ impl OpenProjectServer {
             parent_id: params.parent_id,
             start_date: params.start_date,
             due_date: params.due_date,
+            estimated_time: params.estimated_time,
+            remaining_time: params.remaining_time,
             percentage_done: params.percentage_done,
             custom_fields: params.custom_fields,
         };
@@ -288,6 +296,56 @@ impl OpenProjectServer {
             Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                 "Failed to add user #{} to project #{}: {err}",
                 params.user_id, params.project_id
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "list_time_entry_activities",
+        description = "List available activities for logging spent time (e.g. Development, Specification, Testing) for a project or work package"
+    )]
+    pub async fn list_time_entry_activities(
+        &self,
+        Parameters(params): Parameters<ListTimeEntryActivitiesParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self
+            .client
+            .list_time_entry_activities(params.project_id, params.work_package_id)
+            .await
+        {
+            Ok(activities) => Ok(CallToolResult::structured(
+                serde_json::to_value(activities).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to list time entry activities: {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "log_time",
+        description = "Log spent time on a work package. Accepts friendly duration formats (e.g. '2h', '1.5h', '30m', '02:30', or 'PT2H'). OpenProject automatically recalculates the total spentTime."
+    )]
+    pub async fn log_time(
+        &self,
+        Parameters(params): Parameters<LogTimeParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let wp_id = params.work_package_id;
+        let req = CreateTimeEntryRequest {
+            work_package_id: params.work_package_id,
+            hours: params.hours,
+            comment: params.comment,
+            spent_on: params.spent_on,
+            activity_id: params.activity_id,
+            user_id: params.user_id,
+        };
+
+        match self.client.log_time(req).await {
+            Ok(entry) => Ok(CallToolResult::structured(
+                serde_json::to_value(entry).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to log time on work package #{wp_id}: {err}"
             ))])),
         }
     }

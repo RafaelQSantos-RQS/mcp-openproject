@@ -1,14 +1,17 @@
+pub mod duration;
 pub mod error;
 pub mod filters;
 pub mod models;
 
 use crate::config::Config;
+use duration::parse_duration;
 use error::OpenProjectError;
 use filters::WorkPackageFilterBuilder;
 use models::{
-    CreateWorkPackageRequest, HalCollection, HalMembership, HalProject, HalStatus, HalType,
-    HalUser, HalWorkPackage, MembershipSummary, PaginatedResponse, ProjectSummary, StatusSummary,
-    TypeSummary, UpdateWorkPackageRequest, UserSummary, WorkPackageSummary,
+    CreateTimeEntryRequest, CreateWorkPackageRequest, HalCollection, HalMembership, HalProject,
+    HalStatus, HalTimeEntry, HalTimeEntryActivity, HalType, HalUser, HalWorkPackage,
+    MembershipSummary, PaginatedResponse, ProjectSummary, StatusSummary, TimeEntryActivitySummary,
+    TimeEntrySummary, TypeSummary, UpdateWorkPackageRequest, UserSummary, WorkPackageSummary,
 };
 use reqwest::{Method, RequestBuilder, Response, header};
 use serde_json::json;
@@ -209,6 +212,20 @@ impl OpenProjectClient {
             body["dueDate"] = json!(dd);
         }
 
+        if let Some(pd) = req.percentage_done {
+            body["percentageDone"] = json!(pd);
+        }
+
+        if let Some(et) = req.estimated_time {
+            let parsed = parse_duration(&et).map_err(OpenProjectError::Validation)?;
+            body["estimatedTime"] = json!(parsed);
+        }
+
+        if let Some(rt) = req.remaining_time {
+            let parsed = parse_duration(&rt).map_err(OpenProjectError::Validation)?;
+            body["remainingTime"] = json!(parsed);
+        }
+
         if let (Some(fields), Some(obj)) = (req.custom_fields, body.as_object_mut()) {
             for (k, v) in fields {
                 obj.insert(k, v);
@@ -268,6 +285,16 @@ impl OpenProjectClient {
 
         if let Some(pd) = req.percentage_done {
             body["percentageDone"] = json!(pd);
+        }
+
+        if let Some(et) = req.estimated_time {
+            let parsed = parse_duration(&et).map_err(OpenProjectError::Validation)?;
+            body["estimatedTime"] = json!(parsed);
+        }
+
+        if let Some(rt) = req.remaining_time {
+            let parsed = parse_duration(&rt).map_err(OpenProjectError::Validation)?;
+            body["remainingTime"] = json!(parsed);
         }
 
         let mut links = serde_json::Map::new();
@@ -393,5 +420,108 @@ impl OpenProjectClient {
         let resp_body = Self::handle_response(resp).await?;
         let membership: HalMembership = serde_json::from_str(&resp_body)?;
         Ok(membership.into())
+    }
+
+    /// Lists time entry activities available for a project and/or work package
+    pub async fn list_time_entry_activities(
+        &self,
+        project_id: Option<i64>,
+        work_package_id: Option<i64>,
+    ) -> Result<Vec<TimeEntryActivitySummary>, OpenProjectError> {
+        let mut links = serde_json::Map::new();
+        if let Some(wpid) = work_package_id {
+            links.insert(
+                "workPackage".into(),
+                json!({ "href": format!("/api/v3/work_packages/{wpid}") }),
+            );
+        } else if let Some(pid) = project_id {
+            links.insert(
+                "project".into(),
+                json!({ "href": format!("/api/v3/projects/{pid}") }),
+            );
+        }
+
+        let mut body = json!({});
+        if !links.is_empty() {
+            body["_links"] = serde_json::Value::Object(links);
+        }
+
+        let resp = self
+            .request(Method::POST, "time_entries/form")
+            .header(header::CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let resp_body = Self::handle_response(resp).await?;
+        let form_val: serde_json::Value = serde_json::from_str(&resp_body)?;
+
+        let mut activities = Vec::new();
+        if let Some(allowed) = form_val
+            .pointer("/_embedded/schema/activity/_embedded/allowedValues")
+            .and_then(|v| v.as_array())
+        {
+            for item in allowed {
+                if let Ok(act) = serde_json::from_value::<HalTimeEntryActivity>(item.clone()) {
+                    activities.push(act.into());
+                }
+            }
+        }
+
+        Ok(activities)
+    }
+
+    /// Logs spent time on a work package
+    pub async fn log_time(
+        &self,
+        req: CreateTimeEntryRequest,
+    ) -> Result<TimeEntrySummary, OpenProjectError> {
+        let parsed_hours = parse_duration(&req.hours).map_err(OpenProjectError::Validation)?;
+
+        let spent_on = req
+            .spent_on
+            .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%d").to_string());
+
+        let mut body = json!({
+            "hours": parsed_hours,
+            "spentOn": spent_on,
+        });
+
+        if let Some(comment) = req.comment {
+            body["comment"] = json!({ "raw": comment });
+        }
+
+        let mut links = serde_json::Map::new();
+        links.insert(
+            "workPackage".into(),
+            json!({ "href": format!("/api/v3/work_packages/{}", req.work_package_id) }),
+        );
+
+        if let Some(act_id) = req.activity_id {
+            links.insert(
+                "activity".into(),
+                json!({ "href": format!("/api/v3/time_entries/activities/{act_id}") }),
+            );
+        }
+
+        if let Some(uid) = req.user_id {
+            links.insert(
+                "user".into(),
+                json!({ "href": format!("/api/v3/users/{uid}") }),
+            );
+        }
+
+        body["_links"] = serde_json::Value::Object(links);
+
+        let resp = self
+            .request(Method::POST, "time_entries")
+            .header(header::CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let resp_body = Self::handle_response(resp).await?;
+        let time_entry: HalTimeEntry = serde_json::from_str(&resp_body)?;
+        Ok(time_entry.into())
     }
 }

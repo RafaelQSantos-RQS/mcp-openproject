@@ -204,6 +204,10 @@ pub struct HalWorkPackage {
     pub due_date: Option<String>,
     #[serde(rename = "estimatedTime")]
     pub estimated_time: Option<String>,
+    #[serde(rename = "remainingTime")]
+    pub remaining_time: Option<String>,
+    #[serde(rename = "spentTime")]
+    pub spent_time: Option<String>,
     #[serde(rename = "percentageDone")]
     pub percentage_done: Option<i32>,
     #[serde(rename = "createdAt")]
@@ -238,6 +242,8 @@ pub struct WorkPackageSummary {
     pub start_date: Option<String>,
     pub due_date: Option<String>,
     pub estimated_time: Option<String>,
+    pub remaining_time: Option<String>,
+    pub spent_time: Option<String>,
     pub percentage_done: Option<i32>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
@@ -332,6 +338,8 @@ impl From<HalWorkPackage> for WorkPackageSummary {
             start_date: wp.start_date,
             due_date: wp.due_date,
             estimated_time: wp.estimated_time,
+            remaining_time: wp.remaining_time,
+            spent_time: wp.spent_time,
             percentage_done: wp.percentage_done,
             created_at: wp.created_at,
             updated_at: wp.updated_at,
@@ -356,6 +364,9 @@ pub struct CreateWorkPackageRequest {
     pub parent_id: Option<i64>,
     pub start_date: Option<String>,
     pub due_date: Option<String>,
+    pub estimated_time: Option<String>,
+    pub remaining_time: Option<String>,
+    pub percentage_done: Option<i32>,
     pub custom_fields: Option<HashMap<String, serde_json::Value>>,
 }
 
@@ -372,6 +383,8 @@ pub struct UpdateWorkPackageRequest {
     pub parent_id: Option<i64>,
     pub start_date: Option<String>,
     pub due_date: Option<String>,
+    pub estimated_time: Option<String>,
+    pub remaining_time: Option<String>,
     pub percentage_done: Option<i32>,
     pub custom_fields: Option<HashMap<String, serde_json::Value>>,
 }
@@ -476,4 +489,120 @@ impl From<HalMembership> for MembershipSummary {
             roles,
         }
     }
+}
+
+// -------------------------------------------------------------
+// Time Entries & Activities
+// -------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct HalTimeEntryActivity {
+    pub id: i64,
+    pub name: String,
+    #[serde(rename = "isDefault", default)]
+    pub is_default: Option<bool>,
+    #[serde(default)]
+    pub default: Option<bool>,
+    pub position: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct TimeEntryActivitySummary {
+    pub id: i64,
+    pub name: String,
+    pub is_default: bool,
+}
+
+impl From<HalTimeEntryActivity> for TimeEntryActivitySummary {
+    fn from(a: HalTimeEntryActivity) -> Self {
+        Self {
+            id: a.id,
+            name: a.name,
+            is_default: a.is_default.or(a.default).unwrap_or(false),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct HalTimeEntry {
+    pub id: i64,
+    #[serde(rename = "spentOn")]
+    pub spent_on: Option<String>,
+    pub hours: Option<String>,
+    pub comment: Option<HalFormattable>,
+    #[serde(rename = "createdAt")]
+    pub created_at: Option<String>,
+    #[serde(rename = "_links", default)]
+    pub links: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct TimeEntrySummary {
+    pub id: i64,
+    pub hours: String,
+    pub spent_on: String,
+    pub comment: Option<String>,
+    pub project_id: Option<i64>,
+    pub project_name: Option<String>,
+    pub work_package_id: Option<i64>,
+    pub work_package_subject: Option<String>,
+    pub user_id: Option<i64>,
+    pub user_name: Option<String>,
+    pub activity_id: Option<i64>,
+    pub activity_name: Option<String>,
+    pub created_at: Option<String>,
+}
+
+impl From<HalTimeEntry> for TimeEntrySummary {
+    fn from(entry: HalTimeEntry) -> Self {
+        let extract_link = |key: &str| -> (Option<i64>, Option<String>) {
+            if let Some(obj) = entry.links.get(key).and_then(|v| v.as_object()) {
+                let href = obj.get("href").and_then(|h| h.as_str());
+                let title = obj
+                    .get("title")
+                    .and_then(|t| t.as_str())
+                    .map(ToString::to_string);
+                let id = href.and_then(|h| {
+                    h.trim_end_matches('/')
+                        .rsplit('/')
+                        .next()?
+                        .parse::<i64>()
+                        .ok()
+                });
+                return (id, title);
+            }
+            (None, None)
+        };
+
+        let (project_id, project_name) = extract_link("project");
+        let (work_package_id, work_package_subject) = extract_link("workPackage");
+        let (user_id, user_name) = extract_link("user");
+        let (activity_id, activity_name) = extract_link("activity");
+
+        Self {
+            id: entry.id,
+            hours: entry.hours.unwrap_or_default(),
+            spent_on: entry.spent_on.unwrap_or_default(),
+            comment: entry.comment.and_then(|c| c.as_text()),
+            project_id,
+            project_name,
+            work_package_id,
+            work_package_subject,
+            user_id,
+            user_name,
+            activity_id,
+            activity_name,
+            created_at: entry.created_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct CreateTimeEntryRequest {
+    pub work_package_id: i64,
+    pub hours: String,
+    pub comment: Option<String>,
+    pub spent_on: Option<String>,
+    pub activity_id: Option<i64>,
+    pub user_id: Option<i64>,
 }
