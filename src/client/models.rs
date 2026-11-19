@@ -82,10 +82,14 @@ pub struct HalProject {
     pub active: Option<bool>,
     pub public: Option<bool>,
     pub description: Option<HalFormattable>,
+    #[serde(rename = "statusExplanation")]
+    pub status_explanation: Option<HalFormattable>,
     #[serde(rename = "createdAt")]
     pub created_at: Option<String>,
     #[serde(rename = "updatedAt")]
     pub updated_at: Option<String>,
+    #[serde(rename = "_links", default)]
+    pub links: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -96,12 +100,33 @@ pub struct ProjectSummary {
     pub active: bool,
     pub public: bool,
     pub description: Option<String>,
+    pub status: Option<String>,
+    pub status_name: Option<String>,
+    pub status_explanation: Option<String>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
 }
 
 impl From<HalProject> for ProjectSummary {
     fn from(p: HalProject) -> Self {
+        let (status, status_name) = match p.links.get("status").and_then(|val| val.as_object()) {
+            Some(obj) => {
+                let href = obj.get("href").and_then(|h| h.as_str());
+                let title = obj
+                    .get("title")
+                    .and_then(|t| t.as_str())
+                    .map(ToString::to_string);
+                let id = href.and_then(|h| {
+                    h.trim_end_matches('/')
+                        .rsplit('/')
+                        .next()
+                        .map(ToString::to_string)
+                });
+                (id, title)
+            }
+            None => (None, None),
+        };
+
         Self {
             id: p.id,
             identifier: p.identifier,
@@ -109,10 +134,23 @@ impl From<HalProject> for ProjectSummary {
             active: p.active.unwrap_or(true),
             public: p.public.unwrap_or(false),
             description: p.description.and_then(|d| d.as_text()),
+            status,
+            status_name,
+            status_explanation: p.status_explanation.and_then(|s| s.as_text()),
             created_at: p.created_at,
             updated_at: p.updated_at,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct UpdateProjectRequest {
+    pub id_or_identifier: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub status: Option<String>,
+    pub status_explanation: Option<String>,
+    pub public: Option<bool>,
 }
 
 // -------------------------------------------------------------

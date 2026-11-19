@@ -1,7 +1,7 @@
 use mcp_openproject::client::OpenProjectClient;
 use mcp_openproject::client::error::OpenProjectError;
 use mcp_openproject::client::models::{
-    CreateVersionRequest, CreateWorkPackageRequest, UpdateWorkPackageRequest,
+    CreateVersionRequest, CreateWorkPackageRequest, UpdateProjectRequest, UpdateWorkPackageRequest,
 };
 use mcp_openproject::config::Config;
 use serde_json::json;
@@ -846,4 +846,64 @@ async fn test_mock_create_work_package_with_version() {
     assert_eq!(created.id, 106);
     assert_eq!(created.version_id, Some(111));
     assert_eq!(created.version_name, Some("Backlog".into()));
+}
+
+#[tokio::test]
+async fn test_mock_update_project() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "Project",
+        "id": 117,
+        "identifier": "sistema-gestao",
+        "name": "Sistema de Gestão",
+        "active": true,
+        "public": false,
+        "description": {
+            "format": "markdown",
+            "raw": "Nova descrição detalhada do projeto"
+        },
+        "statusExplanation": {
+            "format": "markdown",
+            "raw": "Projeto avançando conforme esperado na sprint atual"
+        },
+        "_links": {
+            "status": {
+                "href": "/api/v3/project_statuses/on_track",
+                "title": "No cronograma"
+            }
+        }
+    });
+
+    Mock::given(method("PATCH"))
+        .and(path("/api/v3/projects/117"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let updated = client
+        .update_project(UpdateProjectRequest {
+            id_or_identifier: "117".into(),
+            description: Some("Nova descrição detalhada do projeto".into()),
+            status: Some("on_track".into()),
+            status_explanation: Some("Projeto avançando conforme esperado na sprint atual".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(updated.id, 117);
+    assert_eq!(
+        updated.description,
+        Some("Nova descrição detalhada do projeto".into())
+    );
+    assert_eq!(updated.status, Some("on_track".into()));
+    assert_eq!(updated.status_name, Some("No cronograma".into()));
+    assert_eq!(
+        updated.status_explanation,
+        Some("Projeto avançando conforme esperado na sprint atual".into())
+    );
 }

@@ -3,7 +3,7 @@ pub mod tools;
 use crate::client::OpenProjectClient;
 use crate::client::filters::WorkPackageFilterBuilder;
 use crate::client::models::{
-    CreateTimeEntryRequest, CreateVersionRequest, CreateWorkPackageRequest,
+    CreateTimeEntryRequest, CreateVersionRequest, CreateWorkPackageRequest, UpdateProjectRequest,
     UpdateWorkPackageRequest,
 };
 use rmcp::{
@@ -17,7 +17,7 @@ use tools::{
     GetProjectParams, GetSprintParams, GetVersionParams, GetWorkPackageParams,
     ListProjectAssigneesParams, ListProjectsParams, ListSprintsParams, ListStatusesParams,
     ListTimeEntryActivitiesParams, ListTypesParams, ListVersionsParams, LogTimeParams,
-    SearchWorkPackagesParams, UpdateWorkPackageParams,
+    SearchWorkPackagesParams, UpdateProjectParams, UpdateWorkPackageParams,
 };
 
 #[derive(Clone)]
@@ -79,6 +79,34 @@ impl OpenProjectServer {
             Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                 "Failed to get project '{}': {err}",
                 params.id_or_identifier
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "update_project",
+        description = "Update an existing project in OpenProject. Allows modifying description, project health status (e.g. 'on_track', 'at_risk', 'off_track', 'not_started', 'finished', 'discontinued', or 'none' to clear), status explanation, name, and visibility."
+    )]
+    pub async fn update_project(
+        &self,
+        Parameters(params): Parameters<UpdateProjectParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let id = params.id_or_identifier.clone();
+        let req = UpdateProjectRequest {
+            id_or_identifier: params.id_or_identifier,
+            name: params.name,
+            description: params.description,
+            status: params.status,
+            status_explanation: params.status_explanation,
+            public: params.public,
+        };
+
+        match self.client.update_project(req).await {
+            Ok(project) => Ok(CallToolResult::structured(
+                serde_json::to_value(project).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to update project '{id}': {err}"
             ))])),
         }
     }

@@ -18,6 +18,23 @@ pub struct GetProjectParams {
     pub id_or_identifier: String,
 }
 
+/// Parameters for updating an existing project
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct UpdateProjectParams {
+    /// Numeric project ID or string identifier (e.g. "117" or "my-project")
+    pub id_or_identifier: String,
+    /// Optional new project description (markdown supported)
+    pub description: Option<String>,
+    /// Optional project health status: 'on_track', 'at_risk', 'off_track', 'not_started', 'finished', 'discontinued' (or 'none' to clear)
+    pub status: Option<String>,
+    /// Optional status explanation / health details (markdown supported)
+    pub status_explanation: Option<String>,
+    /// Optional new project name
+    pub name: Option<String>,
+    /// Optional public/private visibility flag
+    pub public: Option<bool>,
+}
+
 /// Parameters for searching and filtering work packages
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 pub struct SearchWorkPackagesParams {

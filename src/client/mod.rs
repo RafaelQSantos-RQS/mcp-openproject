@@ -12,7 +12,8 @@ use models::{
     HalMembership, HalProject, HalSprint, HalStatus, HalTimeEntry, HalTimeEntryActivity, HalType,
     HalUser, HalVersion, HalWorkPackage, MembershipSummary, PaginatedResponse, ProjectSummary,
     SprintSummary, StatusSummary, TimeEntryActivitySummary, TimeEntrySummary, TypeSummary,
-    UpdateWorkPackageRequest, UserSummary, VersionSummary, WorkPackageSummary,
+    UpdateProjectRequest, UpdateWorkPackageRequest, UserSummary, VersionSummary,
+    WorkPackageSummary,
 };
 use reqwest::{Method, RequestBuilder, Response, header};
 use serde_json::json;
@@ -117,6 +118,78 @@ impl OpenProjectClient {
         let resp = self.request(Method::GET, &path).send().await?;
         let body = Self::handle_response(resp).await?;
         let project: HalProject = serde_json::from_str(&body)?;
+        Ok(project.into())
+    }
+
+    /// Updates an existing project's description, status, status explanation, name, etc.
+    pub async fn update_project(
+        &self,
+        req: UpdateProjectRequest,
+    ) -> Result<ProjectSummary, OpenProjectError> {
+        let mut body = json!({});
+
+        if let Some(name) = req.name {
+            body["name"] = json!(name);
+        }
+
+        if let Some(desc) = req.description {
+            body["description"] = json!({ "raw": desc });
+        }
+
+        if let Some(explanation) = req.status_explanation {
+            body["statusExplanation"] = json!({ "raw": explanation });
+        }
+
+        if let Some(pub_flag) = req.public {
+            body["public"] = json!(pub_flag);
+        }
+
+        if let Some(status_input) = req.status {
+            let normalized = status_input.trim().to_lowercase();
+            let mut links = serde_json::Map::new();
+
+            if normalized.is_empty()
+                || normalized == "none"
+                || normalized == "null"
+                || normalized == "clear"
+            {
+                links.insert("status".into(), json!({ "href": null }));
+            } else {
+                let status_id = match normalized.as_str() {
+                    "on_track" | "on track" | "ontrack" | "no cronograma" => "on_track",
+                    "at_risk" | "at risk" | "atrisk" | "em risco" => "at_risk",
+                    "off_track" | "off track" | "offtrack" | "fora do cronograma" => "off_track",
+                    "not_started" | "not started" | "não iniciado" | "nao iniciado" => {
+                        "not_started"
+                    }
+                    "finished" | "concluído" | "concluido" => "finished",
+                    "discontinued" | "descontinuado" => "discontinued",
+                    other => {
+                        if let Some(stripped) = other.strip_prefix("/api/v3/project_statuses/") {
+                            stripped
+                        } else {
+                            other
+                        }
+                    }
+                };
+                links.insert(
+                    "status".into(),
+                    json!({ "href": format!("/api/v3/project_statuses/{status_id}") }),
+                );
+            }
+            body["_links"] = serde_json::Value::Object(links);
+        }
+
+        let path = format!("projects/{}", req.id_or_identifier.trim());
+        let resp = self
+            .request(Method::PATCH, &path)
+            .header(header::CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let resp_body = Self::handle_response(resp).await?;
+        let project: HalProject = serde_json::from_str(&resp_body)?;
         Ok(project.into())
     }
 

@@ -8,17 +8,18 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[test]
-fn test_server_registers_all_18_tools() {
+fn test_server_registers_all_19_tools() {
     let config = Config::new("https://example.com".into(), "test-key".into()).unwrap();
     let client = OpenProjectClient::new(config).unwrap();
     let server = OpenProjectServer::new(client);
 
     let tools = server.router().list_all();
-    assert_eq!(tools.len(), 18);
+    assert_eq!(tools.len(), 19);
 
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
     assert!(names.contains(&"list_projects"));
     assert!(names.contains(&"get_project"));
+    assert!(names.contains(&"update_project"));
     assert!(names.contains(&"search_work_packages"));
     assert!(names.contains(&"get_work_package"));
     assert!(names.contains(&"create_work_package"));
