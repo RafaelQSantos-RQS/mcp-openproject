@@ -33,7 +33,7 @@ impl OpenProjectClient {
         );
         headers.insert(
             header::USER_AGENT,
-            header::HeaderValue::from_static("mcp-openproject/0.1.0"),
+            header::HeaderValue::from_static(concat!("mcp-openproject/", env!("CARGO_PKG_VERSION"))),
         );
 
         let http = reqwest::Client::builder()
