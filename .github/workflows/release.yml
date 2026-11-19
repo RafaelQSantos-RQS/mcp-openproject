@@ -93,5 +93,5 @@ jobs:
       - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          body: ${{ steps.git-cliff.outputs.changelog }}
+          body: ${{ steps.git-cliff.outputs.content }}
           files: dist/*
