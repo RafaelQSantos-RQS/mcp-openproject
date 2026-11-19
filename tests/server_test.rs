@@ -8,13 +8,13 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[test]
-fn test_server_registers_all_15_tools() {
+fn test_server_registers_all_18_tools() {
     let config = Config::new("https://example.com".into(), "test-key".into()).unwrap();
     let client = OpenProjectClient::new(config).unwrap();
     let server = OpenProjectServer::new(client);
 
     let tools = server.router().list_all();
-    assert_eq!(tools.len(), 15);
+    assert_eq!(tools.len(), 18);
 
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
     assert!(names.contains(&"list_projects"));
@@ -32,6 +32,9 @@ fn test_server_registers_all_15_tools() {
     assert!(names.contains(&"log_time"));
     assert!(names.contains(&"list_sprints"));
     assert!(names.contains(&"get_sprint"));
+    assert!(names.contains(&"create_version"));
+    assert!(names.contains(&"list_versions"));
+    assert!(names.contains(&"get_version"));
 }
 
 #[tokio::test]

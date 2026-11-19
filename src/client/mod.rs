@@ -8,11 +8,11 @@ use duration::parse_duration;
 use error::OpenProjectError;
 use filters::WorkPackageFilterBuilder;
 use models::{
-    CreateTimeEntryRequest, CreateWorkPackageRequest, HalCollection, HalMembership, HalProject,
-    HalSprint, HalStatus, HalTimeEntry, HalTimeEntryActivity, HalType, HalUser, HalWorkPackage,
-    MembershipSummary, PaginatedResponse, ProjectSummary, SprintSummary, StatusSummary,
-    TimeEntryActivitySummary, TimeEntrySummary, TypeSummary, UpdateWorkPackageRequest, UserSummary,
-    WorkPackageSummary,
+    CreateTimeEntryRequest, CreateVersionRequest, CreateWorkPackageRequest, HalCollection,
+    HalMembership, HalProject, HalSprint, HalStatus, HalTimeEntry, HalTimeEntryActivity, HalType,
+    HalUser, HalVersion, HalWorkPackage, MembershipSummary, PaginatedResponse, ProjectSummary,
+    SprintSummary, StatusSummary, TimeEntryActivitySummary, TimeEntrySummary, TypeSummary,
+    UpdateWorkPackageRequest, UserSummary, VersionSummary, WorkPackageSummary,
 };
 use reqwest::{Method, RequestBuilder, Response, header};
 use serde_json::json;
@@ -33,7 +33,10 @@ impl OpenProjectClient {
         );
         headers.insert(
             header::USER_AGENT,
-            header::HeaderValue::from_static(concat!("mcp-openproject/", env!("CARGO_PKG_VERSION"))),
+            header::HeaderValue::from_static(concat!(
+                "mcp-openproject/",
+                env!("CARGO_PKG_VERSION")
+            )),
         );
 
         let http = reqwest::Client::builder()
@@ -207,6 +210,17 @@ impl OpenProjectClient {
             }
         }
 
+        if let Some(version_id) = req.version_id {
+            if version_id > 0 {
+                links.insert(
+                    "version".into(),
+                    json!({ "href": format!("/api/v3/versions/{version_id}") }),
+                );
+            } else {
+                links.insert("version".into(), json!({ "href": null }));
+            }
+        }
+
         let mut body = json!({
             "subject": req.subject,
             "_links": links,
@@ -353,6 +367,17 @@ impl OpenProjectClient {
                 );
             } else {
                 links.insert("sprint".into(), json!({ "href": null }));
+            }
+        }
+
+        if let Some(version_id) = req.version_id {
+            if version_id > 0 {
+                links.insert(
+                    "version".into(),
+                    json!({ "href": format!("/api/v3/versions/{version_id}") }),
+                );
+            } else {
+                links.insert("version".into(), json!({ "href": null }));
             }
         }
 
@@ -577,5 +602,78 @@ impl OpenProjectClient {
         let body = Self::handle_response(resp).await?;
         let sprint: HalSprint = serde_json::from_str(&body)?;
         Ok(sprint.into())
+    }
+
+    /// Creates a new version/milestone for a project
+    pub async fn create_version(
+        &self,
+        req: CreateVersionRequest,
+    ) -> Result<VersionSummary, OpenProjectError> {
+        let mut links = serde_json::Map::new();
+        links.insert(
+            "project".into(),
+            json!({ "href": format!("/api/v3/projects/{}", req.project_id) }),
+        );
+
+        let mut body = json!({
+            "name": req.name,
+            "_links": links,
+        });
+
+        if let Some(desc) = req.description {
+            body["description"] = json!({ "raw": desc });
+        }
+
+        if let Some(sd) = req.start_date {
+            body["startDate"] = json!(sd);
+        }
+
+        if let Some(ed) = req.end_date {
+            body["endDate"] = json!(ed);
+        }
+
+        if let Some(status) = req.status {
+            body["status"] = json!(status);
+        }
+
+        if let Some(sharing) = req.sharing {
+            body["sharing"] = json!(sharing);
+        }
+
+        let resp = self
+            .request(Method::POST, "versions")
+            .header(header::CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let resp_body = Self::handle_response(resp).await?;
+        let version: HalVersion = serde_json::from_str(&resp_body)?;
+        Ok(version.into())
+    }
+
+    /// Lists versions, optionally filtered by project ID
+    pub async fn list_versions(
+        &self,
+        project_id: Option<i64>,
+    ) -> Result<Vec<VersionSummary>, OpenProjectError> {
+        let path = match project_id {
+            Some(pid) => format!("projects/{pid}/versions"),
+            None => "versions".to_string(),
+        };
+
+        let resp = self.request(Method::GET, &path).send().await?;
+        let body = Self::handle_response(resp).await?;
+        let col: HalCollection<HalVersion> = serde_json::from_str(&body)?;
+        Ok(col.embedded.elements.into_iter().map(Into::into).collect())
+    }
+
+    /// Retrieves details of a specific version by ID
+    pub async fn get_version(&self, id: i64) -> Result<VersionSummary, OpenProjectError> {
+        let path = format!("versions/{id}");
+        let resp = self.request(Method::GET, &path).send().await?;
+        let body = Self::handle_response(resp).await?;
+        let version: HalVersion = serde_json::from_str(&body)?;
+        Ok(version.into())
     }
 }

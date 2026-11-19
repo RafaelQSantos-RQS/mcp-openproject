@@ -33,6 +33,8 @@ pub struct SearchWorkPackagesParams {
     pub assignee_id: Option<i64>,
     /// Filter by Sprint ID
     pub sprint_id: Option<i64>,
+    /// Filter by Version ID
+    pub version_id: Option<i64>,
     /// Page number (1-based, default: 1)
     pub page: Option<usize>,
     /// Number of items per page (default: 20, max: 100)
@@ -67,6 +69,8 @@ pub struct CreateWorkPackageParams {
     pub parent_id: Option<i64>,
     /// Optional Sprint ID to assign this work package to a sprint
     pub sprint_id: Option<i64>,
+    /// Optional Version ID to assign this work package to a version / milestone
+    pub version_id: Option<i64>,
     /// Start date in ISO format YYYY-MM-DD
     pub start_date: Option<String>,
     /// Due date in ISO format YYYY-MM-DD
@@ -104,6 +108,8 @@ pub struct UpdateWorkPackageParams {
     pub parent_id: Option<i64>,
     /// New Sprint ID (or 0 / negative to remove from sprint)
     pub sprint_id: Option<i64>,
+    /// New Version ID (or 0 / negative to remove from version)
+    pub version_id: Option<i64>,
     /// Start date in ISO format YYYY-MM-DD
     pub start_date: Option<String>,
     /// Due date in ISO format YYYY-MM-DD
@@ -185,5 +191,38 @@ pub struct ListSprintsParams {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct GetSprintParams {
     /// Numeric Sprint ID
+    pub id: i64,
+}
+
+/// Parameters for creating a version / milestone in a project
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct CreateVersionParams {
+    /// Numeric Project ID where the version will be created
+    pub project_id: i64,
+    /// Name / title of the version (e.g. 'v1.0.0', 'Release 2026.1')
+    pub name: String,
+    /// Optional description of the version (markdown supported)
+    pub description: Option<String>,
+    /// Optional start date in ISO format YYYY-MM-DD
+    pub start_date: Option<String>,
+    /// Optional end / release date in ISO format YYYY-MM-DD
+    pub end_date: Option<String>,
+    /// Optional status: 'open' (default), 'locked', or 'closed'
+    pub status: Option<String>,
+    /// Optional sharing mode: 'none' (default), 'descendants', 'hierarchy', 'tree', or 'system'
+    pub sharing: Option<String>,
+}
+
+/// Parameters for listing versions
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct ListVersionsParams {
+    /// Optional Project ID to list versions belonging to that project. If omitted, lists all versions visible to the user.
+    pub project_id: Option<i64>,
+}
+
+/// Parameters for getting version details
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct GetVersionParams {
+    /// Numeric Version ID
     pub id: i64,
 }

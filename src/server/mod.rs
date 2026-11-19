@@ -3,7 +3,8 @@ pub mod tools;
 use crate::client::OpenProjectClient;
 use crate::client::filters::WorkPackageFilterBuilder;
 use crate::client::models::{
-    CreateTimeEntryRequest, CreateWorkPackageRequest, UpdateWorkPackageRequest,
+    CreateTimeEntryRequest, CreateVersionRequest, CreateWorkPackageRequest,
+    UpdateWorkPackageRequest,
 };
 use rmcp::{
     ErrorData, ServerHandler,
@@ -12,10 +13,11 @@ use rmcp::{
     tool, tool_handler, tool_router,
 };
 use tools::{
-    AddProjectMemberParams, CreateWorkPackageParams, GetCurrentUserParams, GetProjectParams,
-    GetSprintParams, GetWorkPackageParams, ListProjectAssigneesParams, ListProjectsParams,
-    ListSprintsParams, ListStatusesParams, ListTimeEntryActivitiesParams, ListTypesParams,
-    LogTimeParams, SearchWorkPackagesParams, UpdateWorkPackageParams,
+    AddProjectMemberParams, CreateVersionParams, CreateWorkPackageParams, GetCurrentUserParams,
+    GetProjectParams, GetSprintParams, GetVersionParams, GetWorkPackageParams,
+    ListProjectAssigneesParams, ListProjectsParams, ListSprintsParams, ListStatusesParams,
+    ListTimeEntryActivitiesParams, ListTypesParams, ListVersionsParams, LogTimeParams,
+    SearchWorkPackagesParams, UpdateWorkPackageParams,
 };
 
 #[derive(Clone)]
@@ -95,7 +97,8 @@ impl OpenProjectServer {
             .with_type_id(params.type_id)
             .with_status(params.status.as_deref())
             .with_assignee_id(params.assignee_id)
-            .with_sprint_id(params.sprint_id);
+            .with_sprint_id(params.sprint_id)
+            .with_version_id(params.version_id);
 
         let page = params.page.unwrap_or(1);
         let page_size = params.page_size.unwrap_or(20);
@@ -151,6 +154,7 @@ impl OpenProjectServer {
             assignee_id: params.assignee_id,
             parent_id: params.parent_id,
             sprint_id: params.sprint_id,
+            version_id: params.version_id,
             start_date: params.start_date,
             due_date: params.due_date,
             estimated_time: params.estimated_time,
@@ -189,6 +193,7 @@ impl OpenProjectServer {
             assignee_id: params.assignee_id,
             parent_id: params.parent_id,
             sprint_id: params.sprint_id,
+            version_id: params.version_id,
             start_date: params.start_date,
             due_date: params.due_date,
             estimated_time: params.estimated_time,
@@ -385,6 +390,71 @@ impl OpenProjectServer {
             )),
             Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                 "Failed to get sprint #{}: {err}",
+                params.id
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "create_version",
+        description = "Create a new version / milestone in an OpenProject project. Requires project_id and name."
+    )]
+    pub async fn create_version(
+        &self,
+        Parameters(params): Parameters<CreateVersionParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let req = CreateVersionRequest {
+            project_id: params.project_id,
+            name: params.name,
+            description: params.description,
+            start_date: params.start_date,
+            end_date: params.end_date,
+            status: params.status,
+            sharing: params.sharing,
+        };
+
+        match self.client.create_version(req).await {
+            Ok(version) => Ok(CallToolResult::structured(
+                serde_json::to_value(version).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to create version: {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "list_versions",
+        description = "List versions / milestones, optionally filtered by project ID. If project_id is omitted, lists all versions visible to the user."
+    )]
+    pub async fn list_versions(
+        &self,
+        Parameters(params): Parameters<ListVersionsParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.client.list_versions(params.project_id).await {
+            Ok(versions) => Ok(CallToolResult::structured(
+                serde_json::to_value(versions).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to list versions: {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "get_version",
+        description = "Retrieve details of a specific version / milestone by ID (including name, status, dates, sharing, and defining project)"
+    )]
+    pub async fn get_version(
+        &self,
+        Parameters(params): Parameters<GetVersionParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.client.get_version(params.id).await {
+            Ok(version) => Ok(CallToolResult::structured(
+                serde_json::to_value(version).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to get version #{}: {err}",
                 params.id
             ))])),
         }

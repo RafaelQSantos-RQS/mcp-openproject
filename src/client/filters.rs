@@ -117,6 +117,19 @@ impl WorkPackageFilterBuilder {
         self
     }
 
+    /// Filter by Version ID
+    pub fn with_version_id(mut self, version_id: Option<i64>) -> Self {
+        if let Some(id) = version_id {
+            self.filters.push(json!({
+                "version": {
+                    "operator": "=",
+                    "values": [id.to_string()]
+                }
+            }));
+        }
+        self
+    }
+
     /// Checks if any filters are set
     pub fn is_empty(&self) -> bool {
         self.filters.is_empty()
@@ -166,5 +179,12 @@ mod tests {
         let builder = WorkPackageFilterBuilder::new().with_sprint_id(Some(75));
         let query = builder.to_query_string().unwrap();
         assert!(query.contains("\"sprint\":{\"operator\":\"=\",\"values\":[\"75\"]}"));
+    }
+
+    #[test]
+    fn test_version_filter() {
+        let builder = WorkPackageFilterBuilder::new().with_version_id(Some(111));
+        let query = builder.to_query_string().unwrap();
+        assert!(query.contains("\"version\":{\"operator\":\"=\",\"values\":[\"111\"]}"));
     }
 }

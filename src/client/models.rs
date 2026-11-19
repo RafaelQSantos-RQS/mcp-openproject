@@ -241,6 +241,8 @@ pub struct WorkPackageSummary {
     pub parent_id: Option<i64>,
     pub sprint_id: Option<i64>,
     pub sprint_name: Option<String>,
+    pub version_id: Option<i64>,
+    pub version_name: Option<String>,
     pub start_date: Option<String>,
     pub due_date: Option<String>,
     pub estimated_time: Option<String>,
@@ -296,6 +298,12 @@ impl From<HalWorkPackage> for WorkPackageSummary {
         let (author_id, author_name) = get_link_info("author");
         let (parent_id, _) = get_link_info("parent");
         let (sprint_id, sprint_name) = get_link_info("sprint");
+        let (mut version_id, mut version_name) = get_link_info("version");
+        if version_id.is_none() {
+            let (vid, vname) = get_link_info("targetVersions");
+            version_id = vid;
+            version_name = vname;
+        }
 
         // Collect custom fields from extra properties
         let mut custom_fields = HashMap::new();
@@ -340,6 +348,8 @@ impl From<HalWorkPackage> for WorkPackageSummary {
             parent_id,
             sprint_id,
             sprint_name,
+            version_id,
+            version_name,
             start_date: wp.start_date,
             due_date: wp.due_date,
             estimated_time: wp.estimated_time,
@@ -368,6 +378,7 @@ pub struct CreateWorkPackageRequest {
     pub assignee_id: Option<i64>,
     pub parent_id: Option<i64>,
     pub sprint_id: Option<i64>,
+    pub version_id: Option<i64>,
     pub start_date: Option<String>,
     pub due_date: Option<String>,
     pub estimated_time: Option<String>,
@@ -388,6 +399,7 @@ pub struct UpdateWorkPackageRequest {
     pub assignee_id: Option<i64>,
     pub parent_id: Option<i64>,
     pub sprint_id: Option<i64>,
+    pub version_id: Option<i64>,
     pub start_date: Option<String>,
     pub due_date: Option<String>,
     pub estimated_time: Option<String>,
@@ -696,4 +708,98 @@ impl From<HalSprint> for SprintSummary {
             updated_at: s.updated_at,
         }
     }
+}
+
+// -------------------------------------------------------------
+// Versions
+// -------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct HalVersion {
+    pub id: i64,
+    pub name: String,
+    pub description: Option<HalFormattable>,
+    #[serde(rename = "startDate")]
+    pub start_date: Option<String>,
+    #[serde(rename = "endDate")]
+    pub end_date: Option<String>,
+    pub status: Option<String>,
+    pub sharing: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: Option<String>,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: Option<String>,
+    #[serde(rename = "_links", default)]
+    pub links: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct VersionSummary {
+    pub id: i64,
+    pub name: String,
+    pub description: Option<String>,
+    pub start_date: Option<String>,
+    pub end_date: Option<String>,
+    pub status: Option<String>,
+    pub sharing: Option<String>,
+    pub project_id: Option<i64>,
+    pub project_name: Option<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+impl From<HalVersion> for VersionSummary {
+    fn from(v: HalVersion) -> Self {
+        let extract_link = |key: &str| -> (Option<i64>, Option<String>) {
+            if let Some(obj) = v.links.get(key).and_then(|val| val.as_object()) {
+                let href = obj.get("href").and_then(|h| h.as_str());
+                let title = obj
+                    .get("title")
+                    .and_then(|t| t.as_str())
+                    .map(ToString::to_string);
+                let id = href.and_then(|h| {
+                    h.trim_end_matches('/')
+                        .rsplit('/')
+                        .next()?
+                        .parse::<i64>()
+                        .ok()
+                });
+                return (id, title);
+            }
+            (None, None)
+        };
+
+        // OpenProject API v3 primarily links "definingProject", but fallback to "project"
+        let (mut project_id, mut project_name) = extract_link("definingProject");
+        if project_id.is_none() {
+            let (pid, pname) = extract_link("project");
+            project_id = pid;
+            project_name = pname;
+        }
+
+        Self {
+            id: v.id,
+            name: v.name,
+            description: v.description.and_then(|d| d.as_text()),
+            start_date: v.start_date,
+            end_date: v.end_date,
+            status: v.status,
+            sharing: v.sharing,
+            project_id,
+            project_name,
+            created_at: v.created_at,
+            updated_at: v.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct CreateVersionRequest {
+    pub project_id: i64,
+    pub name: String,
+    pub description: Option<String>,
+    pub start_date: Option<String>,
+    pub end_date: Option<String>,
+    pub status: Option<String>,
+    pub sharing: Option<String>,
 }

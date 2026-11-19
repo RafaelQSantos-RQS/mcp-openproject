@@ -1,6 +1,8 @@
 use mcp_openproject::client::OpenProjectClient;
 use mcp_openproject::client::error::OpenProjectError;
-use mcp_openproject::client::models::{CreateWorkPackageRequest, UpdateWorkPackageRequest};
+use mcp_openproject::client::models::{
+    CreateVersionRequest, CreateWorkPackageRequest, UpdateWorkPackageRequest,
+};
 use mcp_openproject::config::Config;
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
@@ -668,4 +670,180 @@ async fn test_mock_create_work_package_with_sprint() {
     assert_eq!(created.id, 105);
     assert_eq!(created.sprint_id, Some(75));
     assert_eq!(created.sprint_name, Some("Sprint 1".into()));
+}
+
+#[tokio::test]
+async fn test_mock_create_version() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "Version",
+        "id": 12,
+        "name": "v1.0.0",
+        "description": {
+            "format": "markdown",
+            "raw": "First stable release"
+        },
+        "startDate": "2026-12-01",
+        "endDate": "2026-12-31",
+        "status": "open",
+        "sharing": "none",
+        "createdAt": "2026-11-19T20:00:00Z",
+        "updatedAt": "2026-11-19T20:00:00Z",
+        "_links": {
+            "definingProject": {
+                "href": "/api/v3/projects/117",
+                "title": "Sistema de Gestão"
+            }
+        }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/api/v3/versions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let created = client
+        .create_version(CreateVersionRequest {
+            project_id: 117,
+            name: "v1.0.0".into(),
+            description: Some("First stable release".into()),
+            start_date: Some("2026-12-01".into()),
+            end_date: Some("2026-12-31".into()),
+            status: Some("open".into()),
+            sharing: Some("none".into()),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(created.id, 12);
+    assert_eq!(created.name, "v1.0.0");
+    assert_eq!(created.description, Some("First stable release".into()));
+    assert_eq!(created.project_id, Some(117));
+    assert_eq!(created.project_name, Some("Sistema de Gestão".into()));
+    assert_eq!(created.status, Some("open".into()));
+    assert_eq!(created.start_date, Some("2026-12-01".into()));
+    assert_eq!(created.end_date, Some("2026-12-31".into()));
+}
+
+#[tokio::test]
+async fn test_mock_list_versions() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "Collection",
+        "total": 1,
+        "count": 1,
+        "_embedded": {
+            "elements": [
+                {
+                    "_type": "Version",
+                    "id": 111,
+                    "name": "Backlog",
+                    "description": {
+                        "raw": "Grupo de pacotes"
+                    },
+                    "status": "open",
+                    "sharing": "none",
+                    "_links": {
+                        "definingProject": {
+                            "href": "/api/v3/projects/117",
+                            "title": "Sistema de Gestão"
+                        }
+                    }
+                }
+            ]
+        }
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/projects/117/versions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let versions = client.list_versions(Some(117)).await.unwrap();
+    assert_eq!(versions.len(), 1);
+    assert_eq!(versions[0].id, 111);
+    assert_eq!(versions[0].name, "Backlog");
+    assert_eq!(versions[0].project_id, Some(117));
+}
+
+#[tokio::test]
+async fn test_mock_get_version() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "Version",
+        "id": 111,
+        "name": "Backlog",
+        "status": "open",
+        "_links": {
+            "definingProject": {
+                "href": "/api/v3/projects/117",
+                "title": "Sistema de Gestão"
+            }
+        }
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/versions/111"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let version = client.get_version(111).await.unwrap();
+    assert_eq!(version.id, 111);
+    assert_eq!(version.name, "Backlog");
+    assert_eq!(version.project_id, Some(117));
+}
+
+#[tokio::test]
+async fn test_mock_create_work_package_with_version() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "id": 106,
+        "lockVersion": 1,
+        "subject": "Task in Version 1.0",
+        "_links": {
+            "project": { "href": "/api/v3/projects/117", "title": "Sistema de Gestão" },
+            "type": { "href": "/api/v3/types/1", "title": "Task" },
+            "version": { "href": "/api/v3/versions/111", "title": "Backlog" }
+        }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/api/v3/projects/117/work_packages"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let created = client
+        .create_work_package(CreateWorkPackageRequest {
+            project_id: 117,
+            type_id: 1,
+            subject: "Task in Version 1.0".into(),
+            version_id: Some(111),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(created.id, 106);
+    assert_eq!(created.version_id, Some(111));
+    assert_eq!(created.version_name, Some("Backlog".into()));
 }
