@@ -683,10 +683,9 @@ impl OpenProjectClient {
         req: CreateVersionRequest,
     ) -> Result<VersionSummary, OpenProjectError> {
         let mut links = serde_json::Map::new();
-        links.insert(
-            "project".into(),
-            json!({ "href": format!("/api/v3/projects/{}", req.project_id) }),
-        );
+        let project_link = json!({ "href": format!("/api/v3/projects/{}", req.project_id) });
+        links.insert("definingProject".into(), project_link.clone());
+        links.insert("project".into(), project_link);
 
         let mut body = json!({
             "name": req.name,
