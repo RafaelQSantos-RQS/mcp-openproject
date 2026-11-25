@@ -1222,6 +1222,10 @@ async fn test_mock_list_time_entries() {
 
     Mock::given(method("GET"))
         .and(path("/api/v3/time_entries"))
+        .and(query_param(
+            "filters",
+            "[{\"entity\":{\"operator\":\"=\",\"values\":[\"5454\"]}}]",
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
         .mount(&mock_server)
         .await;

@@ -157,7 +157,7 @@ impl WorkPackageFilterBuilder {
     }
 }
 
-/// Shared helper to append OpenProject date/datetime range filters (`<>d`, `>=d`, `<=d`)
+/// Shared helper to append OpenProject date/datetime range filters (`<>d`, supporting open bounds via `""`)
 fn push_date_range_filter(
     filters: &mut Vec<serde_json::Value>,
     field: &str,
@@ -167,17 +167,13 @@ fn push_date_range_filter(
     let from = from.map(str::trim).filter(|s| !s.is_empty());
     let to = to.map(str::trim).filter(|s| !s.is_empty());
 
-    match (from, to) {
-        (Some(f), Some(t)) => filters.push(json!({
-            field: { "operator": "<>d", "values": [f, t] }
-        })),
-        (Some(f), None) => filters.push(json!({
-            field: { "operator": ">=d", "values": [f] }
-        })),
-        (None, Some(t)) => filters.push(json!({
-            field: { "operator": "<=d", "values": [t] }
-        })),
-        (None, None) => {}
+    if from.is_some() || to.is_some() {
+        filters.push(json!({
+            field: {
+                "operator": "<>d",
+                "values": [from.unwrap_or(""), to.unwrap_or("")]
+            }
+        }));
     }
 }
 
@@ -191,11 +187,11 @@ impl TimeEntryFilterBuilder {
         Self::default()
     }
 
-    /// Filter by Work Package ID
+    /// Filter by Work Package ID (OpenProject time_entries API uses the `entity` filter key)
     pub fn with_work_package_id(mut self, work_package_id: Option<i64>) -> Self {
         if let Some(id) = work_package_id {
             self.filters.push(json!({
-                "workPackage": {
+                "entity": {
                     "operator": "=",
                     "values": [id.to_string()]
                 }
@@ -298,7 +294,9 @@ mod tests {
         assert!(query.contains(
             "\"dueDate\":{\"operator\":\"<>d\",\"values\":[\"2026-11-01\",\"2026-11-30\"]}"
         ));
-        assert!(query.contains("\"updatedAt\":{\"operator\":\">=d\",\"values\":[\"2026-11-20\"]}"));
+        assert!(
+            query.contains("\"updatedAt\":{\"operator\":\"<>d\",\"values\":[\"2026-11-20\",\"\"]}")
+        );
     }
 
     #[test]
@@ -308,8 +306,10 @@ mod tests {
             .with_user_id(Some(8))
             .with_spent_on_range(None, Some("2026-11-25"));
         let query = builder.to_query_string().unwrap();
-        assert!(query.contains("\"workPackage\":{\"operator\":\"=\",\"values\":[\"5454\"]}"));
+        assert!(query.contains("\"entity\":{\"operator\":\"=\",\"values\":[\"5454\"]}"));
         assert!(query.contains("\"user\":{\"operator\":\"=\",\"values\":[\"8\"]}"));
-        assert!(query.contains("\"spentOn\":{\"operator\":\"<=d\",\"values\":[\"2026-11-25\"]}"));
+        assert!(
+            query.contains("\"spentOn\":{\"operator\":\"<>d\",\"values\":[\"\",\"2026-11-25\"]}")
+        );
     }
 }
