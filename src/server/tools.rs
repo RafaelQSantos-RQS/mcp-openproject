@@ -341,3 +341,29 @@ pub struct DeleteRelationParams {
     /// Numeric Relation ID
     pub id: i64,
 }
+
+/// Parameters for updating an existing time entry
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct UpdateTimeEntryParams {
+    /// ID of the time entry to update
+    pub id: i64,
+    /// New duration, e.g. "2h", "1h30m", "PT2H"
+    pub hours: Option<String>,
+    /// New comment text
+    pub comment: Option<String>,
+    /// New date spent on (YYYY-MM-DD)
+    pub spent_on: Option<String>,
+    /// New activity ID
+    pub activity_id: Option<i64>,
+    /// New work package ID
+    pub work_package_id: Option<i64>,
+    /// New user ID
+    pub user_id: Option<i64>,
+}
+
+/// Parameters for deleting a time entry
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct DeleteTimeEntryParams {
+    /// Numeric Time Entry ID
+    pub id: i64,
+}

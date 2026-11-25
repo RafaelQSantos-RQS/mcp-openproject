@@ -678,6 +678,24 @@ pub struct CreateTimeEntryRequest {
     pub user_id: Option<i64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct UpdateTimeEntryRequest {
+    /// ID of the time entry to update
+    pub id: i64,
+    /// Duration in human-readable form, e.g. "2h", "1h30m", "PT1H30M"
+    pub hours: Option<String>,
+    /// Comment text for the time entry
+    pub comment: Option<String>,
+    /// Date spent on (YYYY-MM-DD)
+    pub spent_on: Option<String>,
+    /// Activity ID (use list_priorities to discover IDs)
+    pub activity_id: Option<i64>,
+    /// Work package ID to associate the entry with
+    pub work_package_id: Option<i64>,
+    /// User ID the entry belongs to
+    pub user_id: Option<i64>,
+}
+
 // -------------------------------------------------------------
 // Sprints
 // -------------------------------------------------------------

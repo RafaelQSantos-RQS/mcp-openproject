@@ -14,7 +14,7 @@ fn test_server_registers_all_28_tools() {
     let server = OpenProjectServer::new(client);
 
     let tools = server.router().list_all();
-    assert_eq!(tools.len(), 28);
+    assert_eq!(tools.len(), 30);
 
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
     assert!(names.contains(&"list_projects"));
@@ -33,6 +33,8 @@ fn test_server_registers_all_28_tools() {
     assert!(names.contains(&"list_time_entry_activities"));
     assert!(names.contains(&"list_time_entries"));
     assert!(names.contains(&"log_time"));
+    assert!(names.contains(&"update_time_entry"));
+    assert!(names.contains(&"delete_time_entry"));
     assert!(names.contains(&"list_sprints"));
     assert!(names.contains(&"get_sprint"));
     assert!(names.contains(&"create_version"));

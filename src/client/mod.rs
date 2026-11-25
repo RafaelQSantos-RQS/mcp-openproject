@@ -14,8 +14,8 @@ use models::{
     HalTimeEntry, HalTimeEntryActivity, HalType, HalUser, HalVersion, HalWorkPackage,
     MembershipSummary, PaginatedResponse, PrioritySummary, ProjectSummary, RelationSummary,
     SprintSummary, StatusSummary, TimeEntryActivitySummary, TimeEntrySummary, TypeSummary,
-    UpdateProjectRequest, UpdateWorkPackageRequest, UserSummary, VersionSummary,
-    WorkPackageSchemaSummary, WorkPackageSummary,
+    UpdateProjectRequest, UpdateTimeEntryRequest, UpdateWorkPackageRequest, UserSummary,
+    VersionSummary, WorkPackageSchemaSummary, WorkPackageSummary,
 };
 use reqwest::{Method, RequestBuilder, Response, header};
 use serde_json::json;
@@ -1082,6 +1082,66 @@ impl OpenProjectClient {
     /// Deletes a work package relation by ID
     pub async fn delete_relation(&self, id: i64) -> Result<(), OpenProjectError> {
         let path = format!("relations/{id}");
+        let resp = self.request(Method::DELETE, &path).send().await?;
+        Self::handle_response(resp).await?;
+        Ok(())
+    }
+
+    /// Updates an existing time entry by ID (PATCH /api/v3/time_entries/{id})
+    pub async fn update_time_entry(
+        &self,
+        req: UpdateTimeEntryRequest,
+    ) -> Result<TimeEntrySummary, OpenProjectError> {
+        let mut body = json!({});
+        let mut links = serde_json::Map::new();
+
+        if let Some(h) = req.hours {
+            let parsed = parse_duration(&h).map_err(OpenProjectError::Validation)?;
+            body["hours"] = json!(parsed);
+        }
+        if let Some(c) = req.comment {
+            body["comment"] = json!({ "raw": c });
+        }
+        if let Some(d) = req.spent_on {
+            body["spentOn"] = json!(d);
+        }
+        if let Some(aid) = req.activity_id {
+            links.insert(
+                "activity".into(),
+                json!({ "href": format!("/api/v3/time_entries/activities/{aid}") }),
+            );
+        }
+        if let Some(wpid) = req.work_package_id {
+            links.insert(
+                "workPackage".into(),
+                json!({ "href": format!("/api/v3/work_packages/{wpid}") }),
+            );
+        }
+        if let Some(uid) = req.user_id {
+            links.insert(
+                "user".into(),
+                json!({ "href": format!("/api/v3/users/{uid}") }),
+            );
+        }
+        if !links.is_empty() {
+            body["_links"] = serde_json::Value::Object(links);
+        }
+
+        let path = format!("time_entries/{}", req.id);
+        let resp = self
+            .request(Method::PATCH, &path)
+            .header(header::CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await?;
+        let resp_body = Self::handle_response(resp).await?;
+        let te: HalTimeEntry = serde_json::from_str(&resp_body)?;
+        Ok(te.into())
+    }
+
+    /// Deletes a time entry by ID (DELETE /api/v3/time_entries/{id})
+    pub async fn delete_time_entry(&self, id: i64) -> Result<(), OpenProjectError> {
+        let path = format!("time_entries/{id}");
         let resp = self.request(Method::DELETE, &path).send().await?;
         Self::handle_response(resp).await?;
         Ok(())

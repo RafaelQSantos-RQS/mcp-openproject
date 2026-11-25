@@ -1304,3 +1304,62 @@ async fn test_mock_relations_lifecycle() {
 
     client.delete_relation(77).await.unwrap();
 }
+
+#[tokio::test]
+async fn test_mock_update_time_entry() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "TimeEntry",
+        "id": 2592,
+        "hours": "PT3H",
+        "spentOn": "2026-11-25",
+        "comment": { "raw": "Updated comment" },
+        "_links": {
+            "workPackage": { "href": "/api/v3/work_packages/102", "title": "My Task" },
+            "activity": { "href": "/api/v3/time_entries/activities/3", "title": "Development" }
+        }
+    });
+
+    Mock::given(method("PATCH"))
+        .and(path("/api/v3/time_entries/2592"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let entry = client
+        .update_time_entry(mcp_openproject::client::models::UpdateTimeEntryRequest {
+            id: 2592,
+            hours: Some("3h".into()),
+            comment: Some("Updated comment".into()),
+            spent_on: Some("2026-11-25".into()),
+            activity_id: None,
+            work_package_id: None,
+            user_id: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(entry.id, 2592);
+    assert_eq!(entry.hours, "PT3H");
+    assert_eq!(entry.comment, Some("Updated comment".into()));
+}
+
+#[tokio::test]
+async fn test_mock_delete_time_entry() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("DELETE"))
+        .and(path("/api/v3/time_entries/2592"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    client.delete_time_entry(2592).await.unwrap();
+}

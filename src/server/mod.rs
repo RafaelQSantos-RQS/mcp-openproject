@@ -4,7 +4,7 @@ use crate::client::OpenProjectClient;
 use crate::client::filters::{TimeEntryFilterBuilder, WorkPackageFilterBuilder};
 use crate::client::models::{
     CreateRelationRequest, CreateTimeEntryRequest, CreateVersionRequest, CreateWorkPackageRequest,
-    UpdateProjectRequest, UpdateWorkPackageRequest,
+    UpdateProjectRequest, UpdateTimeEntryRequest, UpdateWorkPackageRequest,
 };
 use rmcp::{
     ErrorData, ServerHandler,
@@ -14,13 +14,13 @@ use rmcp::{
 };
 use tools::{
     AddProjectMemberParams, AddWorkPackageCommentParams, CreateRelationParams, CreateVersionParams,
-    CreateWorkPackageParams, DeleteRelationParams, GetCurrentUserParams, GetCustomOptionParams,
-    GetProjectParams, GetSprintParams, GetVersionParams, GetWorkPackageParams,
-    GetWorkPackageSchemaParams, ListPrioritiesParams, ListProjectAssigneesParams,
-    ListProjectsParams, ListRelationsParams, ListSprintsParams, ListStatusesParams,
-    ListTimeEntriesParams, ListTimeEntryActivitiesParams, ListTypesParams, ListVersionsParams,
-    ListWorkPackageActivitiesParams, LogTimeParams, SearchWorkPackagesParams, UpdateProjectParams,
-    UpdateWorkPackageParams,
+    CreateWorkPackageParams, DeleteRelationParams, DeleteTimeEntryParams, GetCurrentUserParams,
+    GetCustomOptionParams, GetProjectParams, GetSprintParams, GetVersionParams,
+    GetWorkPackageParams, GetWorkPackageSchemaParams, ListPrioritiesParams,
+    ListProjectAssigneesParams, ListProjectsParams, ListRelationsParams, ListSprintsParams,
+    ListStatusesParams, ListTimeEntriesParams, ListTimeEntryActivitiesParams, ListTypesParams,
+    ListVersionsParams, ListWorkPackageActivitiesParams, LogTimeParams, SearchWorkPackagesParams,
+    UpdateProjectParams, UpdateTimeEntryParams, UpdateWorkPackageParams,
 };
 
 #[derive(Clone)]
@@ -695,6 +695,54 @@ impl OpenProjectServer {
             }))),
             Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                 "Failed to delete relation #{}: {err}",
+                params.id
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "update_time_entry",
+        description = "Update an existing time entry (hours, comment, date, activity, work package or user) by its ID"
+    )]
+    pub async fn update_time_entry(
+        &self,
+        Parameters(params): Parameters<UpdateTimeEntryParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let req = UpdateTimeEntryRequest {
+            id: params.id,
+            hours: params.hours,
+            comment: params.comment,
+            spent_on: params.spent_on,
+            activity_id: params.activity_id,
+            work_package_id: params.work_package_id,
+            user_id: params.user_id,
+        };
+        match self.client.update_time_entry(req).await {
+            Ok(entry) => Ok(CallToolResult::structured(
+                serde_json::to_value(entry).unwrap(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to update time entry #{}: {err}",
+                params.id
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "delete_time_entry",
+        description = "Delete a time entry by its ID"
+    )]
+    pub async fn delete_time_entry(
+        &self,
+        Parameters(params): Parameters<DeleteTimeEntryParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.client.delete_time_entry(params.id).await {
+            Ok(()) => Ok(CallToolResult::structured(serde_json::json!({
+                "deleted": true,
+                "id": params.id
+            }))),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to delete time entry #{}: {err}",
                 params.id
             ))])),
         }

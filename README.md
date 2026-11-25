@@ -17,7 +17,7 @@ Desenvolvido para permitir que assistentes de IA (Claude Desktop, Antigravity, C
 
 ---
 
-## 🛠️ Catálogo de Ferramentas (28 Tools)
+## 🛠️ Catálogo de Ferramentas (30 Tools)
 
 | Ferramenta | Descrição | Principais Parâmetros |
 | :--- | :--- | :--- |
@@ -46,6 +46,8 @@ Desenvolvido para permitir que assistentes de IA (Claude Desktop, Antigravity, C
 | `add_work_package_comment` | Registra um comentário / nota no histórico de atividades de um work package sem alterar a descrição | `work_package_id`, `comment`, `internal` (opcional) |
 | `list_work_package_activities` | Consulta o histórico de comentários e alterações de um work package | `work_package_id` |
 | `list_time_entries` | Lista e filtra apontamentos de horas realizados | `work_package_id`, `project_id`, `user_id`, `spent_from`, `spent_to`, `page`, `page_size` |
+| `update_time_entry` | Atualiza um apontamento de horas existente (horas, comentário, data, atividade, tarefa ou usuário) | `id`, `hours`, `comment`, `spent_on`, `activity_id`, `work_package_id`, `user_id` |
+| `delete_time_entry` | Remove um apontamento de horas pelo ID | `id` |
 | `list_relations` | Lista relações / dependências de um work package (`blocks`, `blocked`, `precedes`, `follows`, `relates`, etc.) | `work_package_id` |
 | `create_relation` | Cria uma dependência / relação entre dois work packages | `from_id`, `to_id`, `relation_type`, `description` (opcional), `lag` (opcional) |
 | `delete_relation` | Remove uma relação / dependência pelo ID | `id` |
