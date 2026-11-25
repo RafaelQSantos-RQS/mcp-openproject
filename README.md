@@ -17,7 +17,7 @@ Desenvolvido para permitir que assistentes de IA (Claude Desktop, Antigravity, C
 
 ---
 
-## 🛠️ Catálogo de Ferramentas (21 Tools)
+## 🛠️ Catálogo de Ferramentas (28 Tools)
 
 | Ferramenta | Descrição | Principais Parâmetros |
 | :--- | :--- | :--- |
@@ -42,6 +42,13 @@ Desenvolvido para permitir que assistentes de IA (Claude Desktop, Antigravity, C
 | `get_version` | Obtém detalhes de uma versão / milestone por ID (nome, status, datas, compartilhamento e projeto definidor) | `id` |
 | `get_work_package_schema` | Inspeciona campos customizados ativos (`customField*`), tipos, obrigatoriedade, localização (`_links` vs raiz) e opções permitidas (`allowed_values`) para um projeto/tipo | `project_id`, `type_id` (opcional), `include_standard_fields` (opcional) |
 | `get_custom_option` | Obtém detalhes (`id`, `value`, `href`) de uma `CustomOption` específica por ID | `id` |
+| `list_priorities` | Lista as prioridades disponíveis (Baixa, Normal, Alta, Imediata) e seus IDs | *(Nenhum)* |
+| `add_work_package_comment` | Registra um comentário / nota no histórico de atividades de um work package sem alterar a descrição | `work_package_id`, `comment`, `internal` (opcional) |
+| `list_work_package_activities` | Consulta o histórico de comentários e alterações de um work package | `work_package_id` |
+| `list_time_entries` | Lista e filtra apontamentos de horas realizados | `work_package_id`, `project_id`, `user_id`, `spent_from`, `spent_to`, `page`, `page_size` |
+| `list_relations` | Lista relações / dependências de um work package (`blocks`, `blocked`, `precedes`, `follows`, `relates`, etc.) | `work_package_id` |
+| `create_relation` | Cria uma dependência / relação entre dois work packages | `from_id`, `to_id`, `relation_type`, `description` (opcional), `lag` (opcional) |
+| `delete_relation` | Remove uma relação / dependência pelo ID | `id` |
 
 > 💡 **Formatos de Duração Amigáveis:**
 > O servidor converte automaticamente formatos comuns de duração para o padrão ISO 8601 do OpenProject:

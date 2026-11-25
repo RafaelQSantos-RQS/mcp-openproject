@@ -1,10 +1,10 @@
 pub mod tools;
 
 use crate::client::OpenProjectClient;
-use crate::client::filters::WorkPackageFilterBuilder;
+use crate::client::filters::{TimeEntryFilterBuilder, WorkPackageFilterBuilder};
 use crate::client::models::{
-    CreateTimeEntryRequest, CreateVersionRequest, CreateWorkPackageRequest, UpdateProjectRequest,
-    UpdateWorkPackageRequest,
+    CreateRelationRequest, CreateTimeEntryRequest, CreateVersionRequest, CreateWorkPackageRequest,
+    UpdateProjectRequest, UpdateWorkPackageRequest,
 };
 use rmcp::{
     ErrorData, ServerHandler,
@@ -13,12 +13,14 @@ use rmcp::{
     tool, tool_handler, tool_router,
 };
 use tools::{
-    AddProjectMemberParams, CreateVersionParams, CreateWorkPackageParams, GetCurrentUserParams,
-    GetCustomOptionParams, GetProjectParams, GetSprintParams, GetVersionParams,
-    GetWorkPackageParams, GetWorkPackageSchemaParams, ListProjectAssigneesParams,
-    ListProjectsParams, ListSprintsParams, ListStatusesParams, ListTimeEntryActivitiesParams,
-    ListTypesParams, ListVersionsParams, LogTimeParams, SearchWorkPackagesParams,
-    UpdateProjectParams, UpdateWorkPackageParams,
+    AddProjectMemberParams, AddWorkPackageCommentParams, CreateRelationParams, CreateVersionParams,
+    CreateWorkPackageParams, DeleteRelationParams, GetCurrentUserParams, GetCustomOptionParams,
+    GetProjectParams, GetSprintParams, GetVersionParams, GetWorkPackageParams,
+    GetWorkPackageSchemaParams, ListPrioritiesParams, ListProjectAssigneesParams,
+    ListProjectsParams, ListRelationsParams, ListSprintsParams, ListStatusesParams,
+    ListTimeEntriesParams, ListTimeEntryActivitiesParams, ListTypesParams, ListVersionsParams,
+    ListWorkPackageActivitiesParams, LogTimeParams, SearchWorkPackagesParams, UpdateProjectParams,
+    UpdateWorkPackageParams,
 };
 
 #[derive(Clone)]
@@ -127,7 +129,15 @@ impl OpenProjectServer {
             .with_status(params.status.as_deref())
             .with_assignee_id(params.assignee_id)
             .with_sprint_id(params.sprint_id)
-            .with_version_id(params.version_id);
+            .with_version_id(params.version_id)
+            .with_due_date_range(
+                params.due_date_from.as_deref(),
+                params.due_date_to.as_deref(),
+            )
+            .with_updated_at_range(
+                params.updated_after.as_deref(),
+                params.updated_before.as_deref(),
+            );
 
         let page = params.page.unwrap_or(1);
         let page_size = params.page_size.unwrap_or(20);
@@ -228,6 +238,7 @@ impl OpenProjectServer {
             estimated_time: params.estimated_time,
             remaining_time: params.remaining_time,
             percentage_done: params.percentage_done,
+            comment: params.comment,
             custom_fields: params.custom_fields,
         };
 
@@ -527,6 +538,163 @@ impl OpenProjectServer {
             )),
             Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                 "Failed to get custom option #{}: {err}",
+                params.id
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "list_priorities",
+        description = "List all work package priorities available in OpenProject (e.g. Low, Normal, High, Immediate) with their IDs"
+    )]
+    pub async fn list_priorities(
+        &self,
+        _params: Parameters<ListPrioritiesParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.client.list_priorities().await {
+            Ok(priorities) => Ok(CallToolResult::structured(
+                serde_json::to_value(priorities).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to list priorities: {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "add_work_package_comment",
+        description = "Add a comment / activity note to a work package without modifying its description or other fields"
+    )]
+    pub async fn add_work_package_comment(
+        &self,
+        Parameters(params): Parameters<AddWorkPackageCommentParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let wp_id = params.work_package_id;
+        let internal = params.internal.unwrap_or(false);
+        match self
+            .client
+            .add_work_package_comment(wp_id, &params.comment, internal)
+            .await
+        {
+            Ok(activity) => Ok(CallToolResult::structured(
+                serde_json::to_value(activity).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to add comment to work package #{wp_id}: {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "list_work_package_activities",
+        description = "List the activity history (comments and field change details) of a work package"
+    )]
+    pub async fn list_work_package_activities(
+        &self,
+        Parameters(params): Parameters<ListWorkPackageActivitiesParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let wp_id = params.work_package_id;
+        match self.client.list_work_package_activities(wp_id).await {
+            Ok(activities) => Ok(CallToolResult::structured(
+                serde_json::to_value(activities).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to list activities for work package #{wp_id}: {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "list_time_entries",
+        description = "List and filter logged time entries by work package, project, user, or spent_on date range with pagination"
+    )]
+    pub async fn list_time_entries(
+        &self,
+        Parameters(params): Parameters<ListTimeEntriesParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let filter = TimeEntryFilterBuilder::new()
+            .with_work_package_id(params.work_package_id)
+            .with_project_id(params.project_id)
+            .with_user_id(params.user_id)
+            .with_spent_on_range(params.spent_from.as_deref(), params.spent_to.as_deref());
+
+        let page = params.page.unwrap_or(1);
+        let page_size = params.page_size.unwrap_or(20);
+
+        match self
+            .client
+            .list_time_entries(&filter, page, page_size)
+            .await
+        {
+            Ok(entries) => Ok(CallToolResult::structured(
+                serde_json::to_value(entries).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to list time entries: {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "list_relations",
+        description = "List dependencies and relations (blocks, blocked, precedes, follows, relates, duplicates, etc.) for a work package"
+    )]
+    pub async fn list_relations(
+        &self,
+        Parameters(params): Parameters<ListRelationsParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let wp_id = params.work_package_id;
+        match self.client.list_relations(wp_id).await {
+            Ok(relations) => Ok(CallToolResult::structured(
+                serde_json::to_value(relations).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to list relations for work package #{wp_id}: {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "create_relation",
+        description = "Create a dependency / relation between two work packages (e.g. blocks, blocked_by, precedes, follows, relates, duplicates)"
+    )]
+    pub async fn create_relation(
+        &self,
+        Parameters(params): Parameters<CreateRelationParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let req = CreateRelationRequest {
+            from_id: params.from_id,
+            to_id: params.to_id,
+            relation_type: params.relation_type,
+            description: params.description,
+            lag: params.lag,
+        };
+
+        match self.client.create_relation(req).await {
+            Ok(relation) => Ok(CallToolResult::structured(
+                serde_json::to_value(relation).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to create relation: {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "delete_relation",
+        description = "Delete a work package relation / dependency by its relation ID"
+    )]
+    pub async fn delete_relation(
+        &self,
+        Parameters(params): Parameters<DeleteRelationParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.client.delete_relation(params.id).await {
+            Ok(()) => Ok(CallToolResult::structured(serde_json::json!({
+                "deleted": true,
+                "id": params.id
+            }))),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to delete relation #{}: {err}",
                 params.id
             ))])),
         }

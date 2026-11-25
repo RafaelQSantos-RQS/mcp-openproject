@@ -130,9 +130,110 @@ impl WorkPackageFilterBuilder {
         self
     }
 
+    /// Filter by due date range (ISO YYYY-MM-DD)
+    pub fn with_due_date_range(mut self, from: Option<&str>, to: Option<&str>) -> Self {
+        push_date_range_filter(&mut self.filters, "dueDate", from, to);
+        self
+    }
+
+    /// Filter by updated_at date range (ISO YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ)
+    pub fn with_updated_at_range(mut self, after: Option<&str>, before: Option<&str>) -> Self {
+        push_date_range_filter(&mut self.filters, "updatedAt", after, before);
+        self
+    }
+
     /// Checks if any filters are set
     pub fn is_empty(&self) -> bool {
         self.filters.is_empty()
+    }
+
+    /// Serializes filters to the JSON string required by OpenProject API v3
+    pub fn to_query_string(&self) -> Option<String> {
+        if self.filters.is_empty() {
+            None
+        } else {
+            serde_json::to_string(&self.filters).ok()
+        }
+    }
+}
+
+/// Shared helper to append OpenProject date/datetime range filters (`<>d`, `>=d`, `<=d`)
+fn push_date_range_filter(
+    filters: &mut Vec<serde_json::Value>,
+    field: &str,
+    from: Option<&str>,
+    to: Option<&str>,
+) {
+    let from = from.map(str::trim).filter(|s| !s.is_empty());
+    let to = to.map(str::trim).filter(|s| !s.is_empty());
+
+    match (from, to) {
+        (Some(f), Some(t)) => filters.push(json!({
+            field: { "operator": "<>d", "values": [f, t] }
+        })),
+        (Some(f), None) => filters.push(json!({
+            field: { "operator": ">=d", "values": [f] }
+        })),
+        (None, Some(t)) => filters.push(json!({
+            field: { "operator": "<=d", "values": [t] }
+        })),
+        (None, None) => {}
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TimeEntryFilterBuilder {
+    filters: Vec<serde_json::Value>,
+}
+
+impl TimeEntryFilterBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Filter by Work Package ID
+    pub fn with_work_package_id(mut self, work_package_id: Option<i64>) -> Self {
+        if let Some(id) = work_package_id {
+            self.filters.push(json!({
+                "workPackage": {
+                    "operator": "=",
+                    "values": [id.to_string()]
+                }
+            }));
+        }
+        self
+    }
+
+    /// Filter by Project ID
+    pub fn with_project_id(mut self, project_id: Option<i64>) -> Self {
+        if let Some(id) = project_id {
+            self.filters.push(json!({
+                "project": {
+                    "operator": "=",
+                    "values": [id.to_string()]
+                }
+            }));
+        }
+        self
+    }
+
+    /// Filter by User ID
+    pub fn with_user_id(mut self, user_id: Option<i64>) -> Self {
+        if let Some(id) = user_id {
+            self.filters.push(json!({
+                "user": {
+                    "operator": "=",
+                    "values": [id.to_string()]
+                }
+            }));
+        }
+        self
+    }
+
+    /// Filter by spentOn date range (ISO YYYY-MM-DD)
+    pub fn with_spent_on_range(mut self, from: Option<&str>, to: Option<&str>) -> Self {
+        push_date_range_filter(&mut self.filters, "spentOn", from, to);
+        self
     }
 
     /// Serializes filters to the JSON string required by OpenProject API v3
@@ -186,5 +287,29 @@ mod tests {
         let builder = WorkPackageFilterBuilder::new().with_version_id(Some(111));
         let query = builder.to_query_string().unwrap();
         assert!(query.contains("\"version\":{\"operator\":\"=\",\"values\":[\"111\"]}"));
+    }
+
+    #[test]
+    fn test_date_range_filters() {
+        let builder = WorkPackageFilterBuilder::new()
+            .with_due_date_range(Some("2026-11-01"), Some("2026-11-30"))
+            .with_updated_at_range(Some("2026-11-20"), None);
+        let query = builder.to_query_string().unwrap();
+        assert!(query.contains(
+            "\"dueDate\":{\"operator\":\"<>d\",\"values\":[\"2026-11-01\",\"2026-11-30\"]}"
+        ));
+        assert!(query.contains("\"updatedAt\":{\"operator\":\">=d\",\"values\":[\"2026-11-20\"]}"));
+    }
+
+    #[test]
+    fn test_time_entry_filter_builder() {
+        let builder = TimeEntryFilterBuilder::new()
+            .with_work_package_id(Some(5454))
+            .with_user_id(Some(8))
+            .with_spent_on_range(None, Some("2026-11-25"));
+        let query = builder.to_query_string().unwrap();
+        assert!(query.contains("\"workPackage\":{\"operator\":\"=\",\"values\":[\"5454\"]}"));
+        assert!(query.contains("\"user\":{\"operator\":\"=\",\"values\":[\"8\"]}"));
+        assert!(query.contains("\"spentOn\":{\"operator\":\"<=d\",\"values\":[\"2026-11-25\"]}"));
     }
 }

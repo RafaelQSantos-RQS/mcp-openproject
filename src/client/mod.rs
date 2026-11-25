@@ -6,15 +6,16 @@ pub mod models;
 use crate::config::Config;
 use duration::parse_duration;
 use error::OpenProjectError;
-use filters::WorkPackageFilterBuilder;
+use filters::{TimeEntryFilterBuilder, WorkPackageFilterBuilder};
 use models::{
-    CreateTimeEntryRequest, CreateVersionRequest, CreateWorkPackageRequest, CustomFieldSchema,
-    CustomOptionSummary, HalCollection, HalCustomOption, HalMembership, HalProject, HalSprint,
-    HalStatus, HalTimeEntry, HalTimeEntryActivity, HalType, HalUser, HalVersion, HalWorkPackage,
-    MembershipSummary, PaginatedResponse, ProjectSummary, SprintSummary, StatusSummary,
-    TimeEntryActivitySummary, TimeEntrySummary, TypeSummary, UpdateProjectRequest,
-    UpdateWorkPackageRequest, UserSummary, VersionSummary, WorkPackageSchemaSummary,
-    WorkPackageSummary,
+    ActivitySummary, CreateRelationRequest, CreateTimeEntryRequest, CreateVersionRequest,
+    CreateWorkPackageRequest, CustomFieldSchema, CustomOptionSummary, HalActivity, HalCollection,
+    HalCustomOption, HalMembership, HalPriority, HalProject, HalRelation, HalSprint, HalStatus,
+    HalTimeEntry, HalTimeEntryActivity, HalType, HalUser, HalVersion, HalWorkPackage,
+    MembershipSummary, PaginatedResponse, PrioritySummary, ProjectSummary, RelationSummary,
+    SprintSummary, StatusSummary, TimeEntryActivitySummary, TimeEntrySummary, TypeSummary,
+    UpdateProjectRequest, UpdateWorkPackageRequest, UserSummary, VersionSummary,
+    WorkPackageSchemaSummary, WorkPackageSummary,
 };
 use reqwest::{Method, RequestBuilder, Response, header};
 use serde_json::json;
@@ -394,6 +395,10 @@ impl OpenProjectClient {
         if let Some(rt) = req.remaining_time {
             let parsed = parse_duration(&rt).map_err(OpenProjectError::Validation)?;
             body["remainingTime"] = json!(parsed);
+        }
+
+        if let Some(comment) = req.comment {
+            body["comment"] = json!({ "raw": comment });
         }
 
         let mut links = serde_json::Map::new();
@@ -942,5 +947,143 @@ impl OpenProjectClient {
         }
 
         Vec::new()
+    }
+
+    /// Lists all work package priorities available in OpenProject
+    pub async fn list_priorities(&self) -> Result<Vec<PrioritySummary>, OpenProjectError> {
+        let resp = self.request(Method::GET, "priorities").send().await?;
+        let body = Self::handle_response(resp).await?;
+        let col: HalCollection<HalPriority> = serde_json::from_str(&body)?;
+        Ok(col.embedded.elements.into_iter().map(Into::into).collect())
+    }
+
+    /// Adds a comment (activity) to a work package
+    pub async fn add_work_package_comment(
+        &self,
+        work_package_id: i64,
+        comment: &str,
+        internal: bool,
+    ) -> Result<ActivitySummary, OpenProjectError> {
+        let mut body = json!({
+            "comment": { "raw": comment }
+        });
+        if internal {
+            body["internal"] = json!(true);
+        }
+
+        let path = format!("work_packages/{work_package_id}/activities");
+        let resp = self
+            .request(Method::POST, &path)
+            .header(header::CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let resp_body = Self::handle_response(resp).await?;
+        let activity: HalActivity = serde_json::from_str(&resp_body)?;
+        Ok(activity.into())
+    }
+
+    /// Lists activities (comments and field change history) for a work package
+    pub async fn list_work_package_activities(
+        &self,
+        work_package_id: i64,
+    ) -> Result<Vec<ActivitySummary>, OpenProjectError> {
+        let path = format!("work_packages/{work_package_id}/activities");
+        let resp = self.request(Method::GET, &path).send().await?;
+        let body = Self::handle_response(resp).await?;
+        let col: HalCollection<HalActivity> = serde_json::from_str(&body)?;
+        Ok(col.embedded.elements.into_iter().map(Into::into).collect())
+    }
+
+    /// Lists time entries with optional filters and pagination
+    pub async fn list_time_entries(
+        &self,
+        filter: &TimeEntryFilterBuilder,
+        page: usize,
+        page_size: usize,
+    ) -> Result<PaginatedResponse<TimeEntrySummary>, OpenProjectError> {
+        let page = page.max(1);
+        let page_size = page_size.clamp(1, 100);
+
+        let mut req = self.request(Method::GET, "time_entries").query(&[
+            ("offset", page.to_string()),
+            ("pageSize", page_size.to_string()),
+        ]);
+
+        if let Some(query_str) = filter.to_query_string() {
+            req = req.query(&[("filters", query_str)]);
+        }
+
+        let resp = req.send().await?;
+        let body = Self::handle_response(resp).await?;
+        let col: HalCollection<HalTimeEntry> = serde_json::from_str(&body)?;
+
+        Ok(PaginatedResponse {
+            total: col.total,
+            page,
+            page_size,
+            items: col.embedded.elements.into_iter().map(Into::into).collect(),
+        })
+    }
+
+    /// Lists relations/dependencies for a work package
+    pub async fn list_relations(
+        &self,
+        work_package_id: i64,
+    ) -> Result<Vec<RelationSummary>, OpenProjectError> {
+        let path = format!("work_packages/{work_package_id}/relations");
+        let resp = self.request(Method::GET, &path).send().await?;
+        let body = Self::handle_response(resp).await?;
+        let col: HalCollection<HalRelation> = serde_json::from_str(&body)?;
+        Ok(col.embedded.elements.into_iter().map(Into::into).collect())
+    }
+
+    /// Creates a relation/dependency between two work packages
+    pub async fn create_relation(
+        &self,
+        req: CreateRelationRequest,
+    ) -> Result<RelationSummary, OpenProjectError> {
+        let normalized_type = match req.relation_type.trim().to_lowercase().as_str() {
+            "blocked_by" | "blocked by" => "blocked",
+            "part_of" | "part of" => "partof",
+            other => other,
+        }
+        .to_string();
+
+        let mut body = json!({
+            "_type": "Relation",
+            "type": normalized_type,
+            "_links": {
+                "to": { "href": format!("/api/v3/work_packages/{}", req.to_id) }
+            }
+        });
+
+        if let Some(desc) = req.description {
+            body["description"] = json!(desc);
+        }
+        if let Some(lag) = req.lag {
+            body["lag"] = json!(lag);
+        }
+
+        let path = format!("work_packages/{}/relations", req.from_id);
+        let resp = self
+            .request(Method::POST, &path)
+            .header(header::CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let resp_body = Self::handle_response(resp).await?;
+        let relation: HalRelation = serde_json::from_str(&resp_body)?;
+        Ok(relation.into())
+    }
+
+    /// Deletes a work package relation by ID
+    pub async fn delete_relation(&self, id: i64) -> Result<(), OpenProjectError> {
+        let path = format!("relations/{id}");
+        let resp = self.request(Method::DELETE, &path).send().await?;
+        Self::handle_response(resp).await?;
+        Ok(())
     }
 }

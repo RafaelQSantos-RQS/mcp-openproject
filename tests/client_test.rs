@@ -1,7 +1,9 @@
 use mcp_openproject::client::OpenProjectClient;
 use mcp_openproject::client::error::OpenProjectError;
+use mcp_openproject::client::filters::TimeEntryFilterBuilder;
 use mcp_openproject::client::models::{
-    CreateVersionRequest, CreateWorkPackageRequest, UpdateProjectRequest, UpdateWorkPackageRequest,
+    CreateRelationRequest, CreateVersionRequest, CreateWorkPackageRequest, UpdateProjectRequest,
+    UpdateWorkPackageRequest,
 };
 use mcp_openproject::config::Config;
 use serde_json::json;
@@ -1099,4 +1101,202 @@ async fn test_mock_create_work_package_with_custom_option_links() {
         created.custom_fields.get("customField11"),
         Some(&json!(["Backend", "DevOps"]))
     );
+}
+
+#[tokio::test]
+async fn test_mock_list_priorities() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "Collection",
+        "total": 2,
+        "count": 2,
+        "_embedded": {
+            "elements": [
+                { "id": 7, "name": "Baixa", "position": 1, "isDefault": false, "isActive": true },
+                { "id": 8, "name": "Normal", "position": 2, "isDefault": true, "isActive": true }
+            ]
+        }
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/priorities"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let priorities = client.list_priorities().await.unwrap();
+    assert_eq!(priorities.len(), 2);
+    assert_eq!(priorities[0].id, 7);
+    assert_eq!(priorities[0].name, "Baixa");
+    assert!(!priorities[0].is_default);
+    assert_eq!(priorities[1].id, 8);
+    assert!(priorities[1].is_default);
+}
+
+#[tokio::test]
+async fn test_mock_add_and_list_work_package_activities() {
+    let mock_server = MockServer::start().await;
+
+    let created_activity = json!({
+        "_type": "Activity::Comment",
+        "id": 999,
+        "comment": { "format": "markdown", "raw": "Aguardando revisão do time de DevOps" },
+        "details": [],
+        "version": 3,
+        "internal": false,
+        "createdAt": "2026-11-25T16:20:00Z",
+        "_links": {
+            "user": { "href": "/api/v3/users/8", "title": "Rafael" }
+        }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/api/v3/work_packages/5454/activities"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(created_activity.clone()))
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/work_packages/5454/activities"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "_type": "Collection",
+            "total": 1,
+            "count": 1,
+            "_embedded": { "elements": [created_activity] }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let added = client
+        .add_work_package_comment(5454, "Aguardando revisão do time de DevOps", false)
+        .await
+        .unwrap();
+    assert_eq!(added.id, 999);
+    assert_eq!(
+        added.comment,
+        Some("Aguardando revisão do time de DevOps".into())
+    );
+    assert_eq!(added.user_id, Some(8));
+    assert_eq!(added.user_name, Some("Rafael".into()));
+
+    let list = client.list_work_package_activities(5454).await.unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].id, 999);
+}
+
+#[tokio::test]
+async fn test_mock_list_time_entries() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "Collection",
+        "total": 1,
+        "count": 1,
+        "pageSize": 20,
+        "offset": 1,
+        "_embedded": {
+            "elements": [
+                {
+                    "_type": "TimeEntry",
+                    "id": 321,
+                    "hours": "PT2H",
+                    "spentOn": "2026-11-25",
+                    "comment": { "raw": "Implementação MCP" },
+                    "_links": {
+                        "project": { "href": "/api/v3/projects/80", "title": "Nova Solução PPM" },
+                        "workPackage": { "href": "/api/v3/work_packages/5454", "title": "API v3" },
+                        "user": { "href": "/api/v3/users/8", "title": "Rafael" },
+                        "activity": { "href": "/api/v3/time_entries/activities/3", "title": "Development" }
+                    }
+                }
+            ]
+        }
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/time_entries"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let filter = TimeEntryFilterBuilder::new().with_work_package_id(Some(5454));
+    let res = client.list_time_entries(&filter, 1, 20).await.unwrap();
+    assert_eq!(res.total, 1);
+    assert_eq!(res.items[0].id, 321);
+    assert_eq!(res.items[0].hours, "PT2H");
+    assert_eq!(res.items[0].work_package_id, Some(5454));
+}
+
+#[tokio::test]
+async fn test_mock_relations_lifecycle() {
+    let mock_server = MockServer::start().await;
+
+    let relation_json = json!({
+        "_type": "Relation",
+        "id": 77,
+        "type": "blocked",
+        "reverseType": "blocks",
+        "description": "Frontend aguarda endpoint",
+        "_links": {
+            "from": { "href": "/api/v3/work_packages/10", "title": "Tela Login" },
+            "to": { "href": "/api/v3/work_packages/11", "title": "Auth API" }
+        }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/api/v3/work_packages/10/relations"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(relation_json.clone()))
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/work_packages/10/relations"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "_type": "Collection",
+            "total": 1,
+            "count": 1,
+            "_embedded": { "elements": [relation_json] }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("DELETE"))
+        .and(path("/api/v3/relations/77"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let created = client
+        .create_relation(CreateRelationRequest {
+            from_id: 10,
+            to_id: 11,
+            relation_type: "blocked_by".into(),
+            description: Some("Frontend aguarda endpoint".into()),
+            lag: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(created.id, 77);
+    assert_eq!(created.relation_type, "blocked");
+    assert_eq!(created.from_id, Some(10));
+    assert_eq!(created.to_id, Some(11));
+
+    let list = client.list_relations(10).await.unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].id, 77);
+
+    client.delete_relation(77).await.unwrap();
 }

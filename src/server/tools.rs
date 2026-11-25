@@ -52,6 +52,14 @@ pub struct SearchWorkPackagesParams {
     pub sprint_id: Option<i64>,
     /// Filter by Version ID
     pub version_id: Option<i64>,
+    /// Filter by due date >= YYYY-MM-DD
+    pub due_date_from: Option<String>,
+    /// Filter by due date <= YYYY-MM-DD
+    pub due_date_to: Option<String>,
+    /// Filter by updated_at >= YYYY-MM-DD
+    pub updated_after: Option<String>,
+    /// Filter by updated_at <= YYYY-MM-DD
+    pub updated_before: Option<String>,
     /// Page number (1-based, default: 1)
     pub page: Option<usize>,
     /// Number of items per page (default: 20, max: 100)
@@ -137,6 +145,8 @@ pub struct UpdateWorkPackageParams {
     pub remaining_time: Option<String>,
     /// Percentage completed (0 - 100)
     pub percentage_done: Option<i32>,
+    /// Optional comment to record in the work package activity history alongside the update (markdown supported)
+    pub comment: Option<String>,
     /// Custom fields key-value map. Scalar/text fields go at root; HAL link fields (e.g. {"customField11": [{"href": "/api/v3/custom_options/25"}]}) are automatically placed under _links.
     pub custom_fields: Option<HashMap<String, serde_json::Value>>,
 }
@@ -259,5 +269,75 @@ pub struct GetWorkPackageSchemaParams {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct GetCustomOptionParams {
     /// Numeric Custom Option ID (e.g. 25 from /api/v3/custom_options/25)
+    pub id: i64,
+}
+
+/// Parameters for listing work package priorities (empty)
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct ListPrioritiesParams {}
+
+/// Parameters for adding a comment to a work package
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AddWorkPackageCommentParams {
+    /// Work package ID to comment on
+    pub work_package_id: i64,
+    /// Comment text (markdown supported)
+    pub comment: String,
+    /// Whether this is an internal comment (default: false)
+    pub internal: Option<bool>,
+}
+
+/// Parameters for listing activities and comments of a work package
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ListWorkPackageActivitiesParams {
+    /// Work package ID
+    pub work_package_id: i64,
+}
+
+/// Parameters for listing time entries
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct ListTimeEntriesParams {
+    /// Filter by Work Package ID
+    pub work_package_id: Option<i64>,
+    /// Filter by Project ID
+    pub project_id: Option<i64>,
+    /// Filter by User ID
+    pub user_id: Option<i64>,
+    /// Filter by spent_on >= YYYY-MM-DD
+    pub spent_from: Option<String>,
+    /// Filter by spent_on <= YYYY-MM-DD
+    pub spent_to: Option<String>,
+    /// Page number (1-based, default: 1)
+    pub page: Option<usize>,
+    /// Number of items per page (default: 20, max: 100)
+    pub page_size: Option<usize>,
+}
+
+/// Parameters for listing relations/dependencies of a work package
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ListRelationsParams {
+    /// Work package ID
+    pub work_package_id: i64,
+}
+
+/// Parameters for creating a relation/dependency between two work packages
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct CreateRelationParams {
+    /// Source work package ID
+    pub from_id: i64,
+    /// Target work package ID
+    pub to_id: i64,
+    /// Relation type: 'relates', 'blocks', 'blocked' (or 'blocked_by'), 'precedes', 'follows', 'duplicates', 'duplicated', 'includes', 'partof', 'requires', 'required'
+    pub relation_type: String,
+    /// Optional description of the relation
+    pub description: Option<String>,
+    /// Optional lag in working days (for precedes/follows)
+    pub lag: Option<i32>,
+}
+
+/// Parameters for deleting a work package relation
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct DeleteRelationParams {
+    /// Numeric Relation ID
     pub id: i64,
 }

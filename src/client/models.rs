@@ -456,6 +456,7 @@ pub struct UpdateWorkPackageRequest {
     pub estimated_time: Option<String>,
     pub remaining_time: Option<String>,
     pub percentage_done: Option<i32>,
+    pub comment: Option<String>,
     pub custom_fields: Option<HashMap<String, serde_json::Value>>,
 }
 
@@ -925,4 +926,190 @@ pub struct WorkPackageSchemaSummary {
     pub custom_fields: Vec<CustomFieldSchema>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub standard_fields: Vec<CustomFieldSchema>,
+}
+
+// -------------------------------------------------------------
+// Priorities
+// -------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct HalPriority {
+    pub id: i64,
+    pub name: String,
+    pub position: Option<i32>,
+    #[serde(rename = "isDefault")]
+    pub is_default: Option<bool>,
+    #[serde(rename = "isActive")]
+    pub is_active: Option<bool>,
+    pub color: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct PrioritySummary {
+    pub id: i64,
+    pub name: String,
+    pub position: Option<i32>,
+    pub is_default: bool,
+    pub is_active: bool,
+    pub color: Option<String>,
+}
+
+impl From<HalPriority> for PrioritySummary {
+    fn from(p: HalPriority) -> Self {
+        Self {
+            id: p.id,
+            name: p.name,
+            position: p.position,
+            is_default: p.is_default.unwrap_or(false),
+            is_active: p.is_active.unwrap_or(true),
+            color: p.color,
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// Work Package Activities / Comments
+// -------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct HalActivity {
+    pub id: i64,
+    pub comment: Option<HalFormattable>,
+    #[serde(default)]
+    pub details: Vec<HalFormattable>,
+    pub version: Option<i64>,
+    pub internal: Option<bool>,
+    #[serde(rename = "createdAt")]
+    pub created_at: Option<String>,
+    #[serde(rename = "_links", default)]
+    pub links: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct ActivitySummary {
+    pub id: i64,
+    pub comment: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub details: Vec<String>,
+    pub user_id: Option<i64>,
+    pub user_name: Option<String>,
+    pub version: Option<i64>,
+    pub internal: bool,
+    pub created_at: Option<String>,
+}
+
+impl From<HalActivity> for ActivitySummary {
+    fn from(a: HalActivity) -> Self {
+        let (user_id, user_name) = match a.links.get("user").and_then(|v| v.as_object()) {
+            Some(obj) => {
+                let href = obj.get("href").and_then(|h| h.as_str());
+                let title = obj
+                    .get("title")
+                    .and_then(|t| t.as_str())
+                    .map(ToString::to_string);
+                let id = href.and_then(|h| {
+                    h.trim_end_matches('/')
+                        .rsplit('/')
+                        .next()?
+                        .parse::<i64>()
+                        .ok()
+                });
+                (id, title)
+            }
+            None => (None, None),
+        };
+
+        let details = a.details.into_iter().filter_map(|d| d.as_text()).collect();
+
+        Self {
+            id: a.id,
+            comment: a
+                .comment
+                .and_then(|c| c.as_text())
+                .filter(|s| !s.is_empty()),
+            details,
+            user_id,
+            user_name,
+            version: a.version,
+            internal: a.internal.unwrap_or(false),
+            created_at: a.created_at,
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// Relations / Dependencies
+// -------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct HalRelation {
+    pub id: i64,
+    #[serde(rename = "type")]
+    pub relation_type: String,
+    #[serde(rename = "reverseType")]
+    pub reverse_type: Option<String>,
+    pub description: Option<String>,
+    pub lag: Option<i32>,
+    #[serde(rename = "_links", default)]
+    pub links: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct RelationSummary {
+    pub id: i64,
+    pub relation_type: String,
+    pub reverse_type: Option<String>,
+    pub description: Option<String>,
+    pub lag: Option<i32>,
+    pub from_id: Option<i64>,
+    pub from_subject: Option<String>,
+    pub to_id: Option<i64>,
+    pub to_subject: Option<String>,
+}
+
+impl From<HalRelation> for RelationSummary {
+    fn from(r: HalRelation) -> Self {
+        let extract = |key: &str| -> (Option<i64>, Option<String>) {
+            if let Some(obj) = r.links.get(key).and_then(|v| v.as_object()) {
+                let href = obj.get("href").and_then(|h| h.as_str());
+                let title = obj
+                    .get("title")
+                    .and_then(|t| t.as_str())
+                    .map(ToString::to_string);
+                let id = href.and_then(|h| {
+                    h.trim_end_matches('/')
+                        .rsplit('/')
+                        .next()?
+                        .parse::<i64>()
+                        .ok()
+                });
+                return (id, title);
+            }
+            (None, None)
+        };
+
+        let (from_id, from_subject) = extract("from");
+        let (to_id, to_subject) = extract("to");
+
+        Self {
+            id: r.id,
+            relation_type: r.relation_type,
+            reverse_type: r.reverse_type,
+            description: r.description,
+            lag: r.lag,
+            from_id,
+            from_subject,
+            to_id,
+            to_subject,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct CreateRelationRequest {
+    pub from_id: i64,
+    pub to_id: i64,
+    pub relation_type: String,
+    pub description: Option<String>,
+    pub lag: Option<i32>,
 }
