@@ -907,3 +907,196 @@ async fn test_mock_update_project() {
         Some("Projeto avançando conforme esperado na sprint atual".into())
     );
 }
+
+#[tokio::test]
+async fn test_mock_get_work_package_schema() {
+    let mock_server = MockServer::start().await;
+
+    let form_body = json!({
+        "_type": "Form",
+        "_embedded": {
+            "schema": {
+                "_type": "Schema",
+                "subject": {
+                    "type": "String",
+                    "name": "Subject",
+                    "required": true,
+                    "hasDefault": false,
+                    "writable": true
+                },
+                "customField12": {
+                    "type": "Boolean",
+                    "name": "Acelerado por IA",
+                    "required": false,
+                    "hasDefault": false,
+                    "writable": true
+                },
+                "customField11": {
+                    "type": "[]CustomOption",
+                    "name": "Área técnica",
+                    "required": false,
+                    "hasDefault": false,
+                    "writable": true,
+                    "location": "_links",
+                    "_embedded": {
+                        "allowedValues": [
+                            {
+                                "_type": "CustomOption",
+                                "id": 25,
+                                "value": "Backend",
+                                "_links": {
+                                    "self": { "href": "/api/v3/custom_options/25", "title": "Backend" }
+                                }
+                            },
+                            {
+                                "_type": "CustomOption",
+                                "id": 26,
+                                "value": "DevOps",
+                                "_links": {
+                                    "self": { "href": "/api/v3/custom_options/26", "title": "DevOps" }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/api/v3/projects/80/work_packages/form"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(form_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let schema = client
+        .get_work_package_schema(80, Some(1), false)
+        .await
+        .unwrap();
+
+    assert_eq!(schema.project_id, 80);
+    assert_eq!(schema.type_id, Some(1));
+    assert!(schema.standard_fields.is_empty());
+    assert_eq!(schema.custom_fields.len(), 2);
+
+    let cf11 = &schema.custom_fields[0];
+    assert_eq!(cf11.key, "customField11");
+    assert_eq!(cf11.name, "Área técnica");
+    assert_eq!(cf11.field_type, "[]CustomOption");
+    assert_eq!(cf11.location, "_links");
+    assert_eq!(cf11.allowed_values.len(), 2);
+    assert_eq!(cf11.allowed_values[0].id, Some(25));
+    assert_eq!(cf11.allowed_values[0].value, "Backend");
+    assert_eq!(cf11.allowed_values[0].href, "/api/v3/custom_options/25");
+
+    let cf12 = &schema.custom_fields[1];
+    assert_eq!(cf12.key, "customField12");
+    assert_eq!(cf12.location, "root");
+}
+
+#[tokio::test]
+async fn test_mock_get_custom_option() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "CustomOption",
+        "id": 25,
+        "value": "Backend",
+        "_links": {
+            "self": {
+                "href": "/api/v3/custom_options/25",
+                "title": "Backend"
+            }
+        }
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/custom_options/25"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let opt = client.get_custom_option(25).await.unwrap();
+    assert_eq!(opt.id, Some(25));
+    assert_eq!(opt.value, "Backend");
+    assert_eq!(opt.href, "/api/v3/custom_options/25");
+}
+
+#[tokio::test]
+async fn test_mock_create_work_package_with_custom_option_links() {
+    let mock_server = MockServer::start().await;
+
+    let expected_body = json!({
+        "subject": "Implementar API",
+        "customField12": true,
+        "_links": {
+            "type": { "href": "/api/v3/types/1" },
+            "customField11": [
+                { "href": "/api/v3/custom_options/25" },
+                { "href": "/api/v3/custom_options/26" }
+            ]
+        }
+    });
+
+    let response_body = json!({
+        "id": 200,
+        "lockVersion": 1,
+        "subject": "Implementar API",
+        "customField12": true,
+        "_links": {
+            "project": { "href": "/api/v3/projects/80", "title": "Nova Solução PPM" },
+            "type": { "href": "/api/v3/types/1", "title": "Task" },
+            "customField11": [
+                { "href": "/api/v3/custom_options/25", "title": "Backend" },
+                { "href": "/api/v3/custom_options/26", "title": "DevOps" }
+            ]
+        }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/api/v3/projects/80/work_packages"))
+        .and(wiremock::matchers::body_json(&expected_body))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let mut custom_fields = std::collections::HashMap::new();
+    custom_fields.insert("customField12".into(), json!(true));
+    custom_fields.insert(
+        "customField11".into(),
+        json!([
+            { "href": "/api/v3/custom_options/25" },
+            { "href": "/api/v3/custom_options/26" }
+        ]),
+    );
+
+    let created = client
+        .create_work_package(CreateWorkPackageRequest {
+            project_id: 80,
+            type_id: 1,
+            subject: "Implementar API".into(),
+            custom_fields: Some(custom_fields),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(created.id, 200);
+    assert_eq!(
+        created.custom_fields.get("customField12"),
+        Some(&json!(true))
+    );
+    assert_eq!(
+        created.custom_fields.get("customField11"),
+        Some(&json!(["Backend", "DevOps"]))
+    );
+}

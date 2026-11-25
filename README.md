@@ -17,7 +17,7 @@ Desenvolvido para permitir que assistentes de IA (Claude Desktop, Antigravity, C
 
 ---
 
-## 🛠️ Catálogo de Ferramentas (19 Tools)
+## 🛠️ Catálogo de Ferramentas (21 Tools)
 
 | Ferramenta | Descrição | Principais Parâmetros |
 | :--- | :--- | :--- |
@@ -40,6 +40,8 @@ Desenvolvido para permitir que assistentes de IA (Claude Desktop, Antigravity, C
 | `create_version` | Cria uma nova versão / milestone em um projeto OpenProject | `project_id`, `name`, `description`, `start_date`, `end_date`, `status` (`'open'`, `'locked'`, `'closed'`), `sharing` (`'none'`, `'descendants'`, etc.) |
 | `list_versions` | Lista versões / milestones cadastrados, com suporte a filtro por projeto ou global | `project_id` (opcional) |
 | `get_version` | Obtém detalhes de uma versão / milestone por ID (nome, status, datas, compartilhamento e projeto definidor) | `id` |
+| `get_work_package_schema` | Inspeciona campos customizados ativos (`customField*`), tipos, obrigatoriedade, localização (`_links` vs raiz) e opções permitidas (`allowed_values`) para um projeto/tipo | `project_id`, `type_id` (opcional), `include_standard_fields` (opcional) |
+| `get_custom_option` | Obtém detalhes (`id`, `value`, `href`) de uma `CustomOption` específica por ID | `id` |
 
 > 💡 **Formatos de Duração Amigáveis:**
 > O servidor converte automaticamente formatos comuns de duração para o padrão ISO 8601 do OpenProject:

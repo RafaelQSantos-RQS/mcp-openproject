@@ -355,13 +355,26 @@ impl From<HalWorkPackage> for WorkPackageSummary {
             }
         }
 
-        // Also check if any customField is inside _links (e.g. list/user custom fields)
+        // Also check if any customField is inside _links (e.g. list/user/[]CustomOption custom fields)
         for (k, v) in &wp.links {
             if k.starts_with("customField") && !v.is_null() && !custom_fields.contains_key(k) {
                 if let Some(title) = v.get("title").and_then(|t| t.as_str()) {
                     custom_fields.insert(k.clone(), serde_json::Value::String(title.to_string()));
                 } else if let Some(href) = v.get("href").and_then(|h| h.as_str()) {
                     custom_fields.insert(k.clone(), serde_json::Value::String(href.to_string()));
+                } else if let Some(arr) = v.as_array() {
+                    let items: Vec<serde_json::Value> = arr
+                        .iter()
+                        .filter_map(|item| {
+                            item.get("title")
+                                .and_then(|t| t.as_str())
+                                .or_else(|| item.get("href").and_then(|h| h.as_str()))
+                                .map(|s| serde_json::Value::String(s.to_string()))
+                        })
+                        .collect();
+                    if !items.is_empty() {
+                        custom_fields.insert(k.clone(), serde_json::Value::Array(items));
+                    }
                 }
             }
         }
@@ -840,4 +853,76 @@ pub struct CreateVersionRequest {
     pub end_date: Option<String>,
     pub status: Option<String>,
     pub sharing: Option<String>,
+}
+
+// -------------------------------------------------------------
+// Work Package Schemas & Custom Options
+// -------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct HalCustomOption {
+    pub id: Option<i64>,
+    pub value: Option<String>,
+    pub name: Option<String>,
+    #[serde(rename = "_links", default)]
+    pub links: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct CustomOptionSummary {
+    pub id: Option<i64>,
+    pub value: String,
+    pub href: String,
+}
+
+impl From<HalCustomOption> for CustomOptionSummary {
+    fn from(opt: HalCustomOption) -> Self {
+        let self_link = opt.links.get("self");
+        let href = self_link
+            .and_then(|s| s.get("href"))
+            .and_then(|h| h.as_str())
+            .unwrap_or_default()
+            .to_string();
+        let value = opt
+            .value
+            .or(opt.name)
+            .or_else(|| {
+                self_link
+                    .and_then(|s| s.get("title"))
+                    .and_then(|t| t.as_str())
+                    .map(ToString::to_string)
+            })
+            .unwrap_or_default();
+        let id = opt.id.or_else(|| {
+            href.trim_end_matches('/')
+                .rsplit('/')
+                .next()?
+                .parse::<i64>()
+                .ok()
+        });
+
+        Self { id, value, href }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct CustomFieldSchema {
+    pub key: String,
+    pub name: String,
+    pub field_type: String,
+    pub required: bool,
+    pub writable: bool,
+    pub has_default: bool,
+    pub location: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_values: Vec<CustomOptionSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct WorkPackageSchemaSummary {
+    pub project_id: i64,
+    pub type_id: Option<i64>,
+    pub custom_fields: Vec<CustomFieldSchema>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub standard_fields: Vec<CustomFieldSchema>,
 }

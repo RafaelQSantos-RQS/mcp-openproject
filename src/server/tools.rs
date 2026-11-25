@@ -98,7 +98,7 @@ pub struct CreateWorkPackageParams {
     pub remaining_time: Option<String>,
     /// Percentage completed (0 - 100)
     pub percentage_done: Option<i32>,
-    /// Custom fields key-value map (e.g. {"customField1": "value"})
+    /// Custom fields key-value map. Scalar/text fields (e.g. {"customField12": true}) go at root; HAL link fields (e.g. {"customField11": [{"href": "/api/v3/custom_options/25"}]}) are automatically placed under _links. Use `get_work_package_schema` to discover keys and allowed options.
     pub custom_fields: Option<HashMap<String, serde_json::Value>>,
 }
 
@@ -137,7 +137,7 @@ pub struct UpdateWorkPackageParams {
     pub remaining_time: Option<String>,
     /// Percentage completed (0 - 100)
     pub percentage_done: Option<i32>,
-    /// Custom fields key-value map
+    /// Custom fields key-value map. Scalar/text fields go at root; HAL link fields (e.g. {"customField11": [{"href": "/api/v3/custom_options/25"}]}) are automatically placed under _links.
     pub custom_fields: Option<HashMap<String, serde_json::Value>>,
 }
 
@@ -241,5 +241,23 @@ pub struct ListVersionsParams {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct GetVersionParams {
     /// Numeric Version ID
+    pub id: i64,
+}
+
+/// Parameters for inspecting active work package schema and custom field options for a project/type
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct GetWorkPackageSchemaParams {
+    /// Numeric Project ID to inspect active custom fields and allowed options for
+    pub project_id: i64,
+    /// Optional Work Package Type ID (e.g. 1 for Task). If omitted, OpenProject uses the project's default type.
+    pub type_id: Option<i64>,
+    /// Whether to also include standard OpenProject fields (subject, status, priority, etc.) in the response (default: false)
+    pub include_standard_fields: Option<bool>,
+}
+
+/// Parameters for retrieving a single custom option by ID
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct GetCustomOptionParams {
+    /// Numeric Custom Option ID (e.g. 25 from /api/v3/custom_options/25)
     pub id: i64,
 }

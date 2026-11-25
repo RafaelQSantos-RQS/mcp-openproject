@@ -14,10 +14,11 @@ use rmcp::{
 };
 use tools::{
     AddProjectMemberParams, CreateVersionParams, CreateWorkPackageParams, GetCurrentUserParams,
-    GetProjectParams, GetSprintParams, GetVersionParams, GetWorkPackageParams,
-    ListProjectAssigneesParams, ListProjectsParams, ListSprintsParams, ListStatusesParams,
-    ListTimeEntryActivitiesParams, ListTypesParams, ListVersionsParams, LogTimeParams,
-    SearchWorkPackagesParams, UpdateProjectParams, UpdateWorkPackageParams,
+    GetCustomOptionParams, GetProjectParams, GetSprintParams, GetVersionParams,
+    GetWorkPackageParams, GetWorkPackageSchemaParams, ListProjectAssigneesParams,
+    ListProjectsParams, ListSprintsParams, ListStatusesParams, ListTimeEntryActivitiesParams,
+    ListTypesParams, ListVersionsParams, LogTimeParams, SearchWorkPackagesParams,
+    UpdateProjectParams, UpdateWorkPackageParams,
 };
 
 #[derive(Clone)]
@@ -483,6 +484,49 @@ impl OpenProjectServer {
             )),
             Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                 "Failed to get version #{}: {err}",
+                params.id
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "get_work_package_schema",
+        description = "Inspect active custom fields (e.g. customField11), their types, required flags, location (_links vs root), and allowed CustomOption values (id, value, href) for a project and work package type"
+    )]
+    pub async fn get_work_package_schema(
+        &self,
+        Parameters(params): Parameters<GetWorkPackageSchemaParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let include_standard = params.include_standard_fields.unwrap_or(false);
+        match self
+            .client
+            .get_work_package_schema(params.project_id, params.type_id, include_standard)
+            .await
+        {
+            Ok(schema) => Ok(CallToolResult::structured(
+                serde_json::to_value(schema).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to inspect work package schema for project #{}: {err}",
+                params.project_id
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "get_custom_option",
+        description = "Retrieve details of a specific CustomOption by numeric ID (returns id, value, and href)"
+    )]
+    pub async fn get_custom_option(
+        &self,
+        Parameters(params): Parameters<GetCustomOptionParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.client.get_custom_option(params.id).await {
+            Ok(option) => Ok(CallToolResult::structured(
+                serde_json::to_value(option).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to get custom option #{}: {err}",
                 params.id
             ))])),
         }
