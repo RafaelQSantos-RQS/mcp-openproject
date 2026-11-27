@@ -153,6 +153,16 @@ pub struct UpdateProjectRequest {
     pub public: Option<bool>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct CreateProjectRequest {
+    pub name: String,
+    pub identifier: String,
+    pub description: Option<String>,
+    pub public: Option<bool>,
+    pub parent_id: Option<i64>,
+    pub custom_fields: Option<HashMap<String, serde_json::Value>>,
+}
+
 // -------------------------------------------------------------
 // Types
 // -------------------------------------------------------------
@@ -941,6 +951,13 @@ pub struct CustomFieldSchema {
 pub struct WorkPackageSchemaSummary {
     pub project_id: i64,
     pub type_id: Option<i64>,
+    pub custom_fields: Vec<CustomFieldSchema>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub standard_fields: Vec<CustomFieldSchema>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct ProjectSchemaSummary {
     pub custom_fields: Vec<CustomFieldSchema>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub standard_fields: Vec<CustomFieldSchema>,

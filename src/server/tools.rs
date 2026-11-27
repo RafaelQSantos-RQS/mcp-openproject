@@ -35,6 +35,23 @@ pub struct UpdateProjectParams {
     pub public: Option<bool>,
 }
 
+/// Parameters for creating a new project
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct CreateProjectParams {
+    /// Project name (1-255 characters)
+    pub name: String,
+    /// Unique project identifier (1-100 characters; lowercase letters, numbers and hyphens, e.g. "my-project")
+    pub identifier: String,
+    /// Optional project description (markdown supported)
+    pub description: Option<String>,
+    /// Optional public/private visibility flag (default: false, private)
+    pub public: Option<bool>,
+    /// Optional parent project ID (creates this project as a subproject)
+    pub parent_id: Option<i64>,
+    /// Custom fields key-value map. Scalar/text fields go at root; HAL link fields (e.g. {"customField31": {"href": "/api/v3/custom_options/25"}}) are automatically placed under _links. Use `get_project_schema` to discover keys, required flags and allowed options.
+    pub custom_fields: Option<HashMap<String, serde_json::Value>>,
+}
+
 /// Parameters for searching and filtering work packages
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 pub struct SearchWorkPackagesParams {
@@ -262,6 +279,13 @@ pub struct GetWorkPackageSchemaParams {
     /// Optional Work Package Type ID (e.g. 1 for Task). If omitted, OpenProject uses the project's default type.
     pub type_id: Option<i64>,
     /// Whether to also include standard OpenProject fields (subject, status, priority, etc.) in the response (default: false)
+    pub include_standard_fields: Option<bool>,
+}
+
+/// Parameters for inspecting the project schema and custom field options
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct GetProjectSchemaParams {
+    /// Whether to also include standard OpenProject fields (name, identifier, public, etc.) in the response (default: false)
     pub include_standard_fields: Option<bool>,
 }
 

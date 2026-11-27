@@ -8,14 +8,15 @@ use duration::parse_duration;
 use error::OpenProjectError;
 use filters::{TimeEntryFilterBuilder, WorkPackageFilterBuilder};
 use models::{
-    ActivitySummary, CreateRelationRequest, CreateTimeEntryRequest, CreateVersionRequest,
-    CreateWorkPackageRequest, CustomFieldSchema, CustomOptionSummary, HalActivity, HalCollection,
-    HalCustomOption, HalMembership, HalPriority, HalProject, HalRelation, HalSprint, HalStatus,
-    HalTimeEntry, HalTimeEntryActivity, HalType, HalUser, HalVersion, HalWorkPackage,
-    MembershipSummary, PaginatedResponse, PrioritySummary, ProjectSummary, RelationSummary,
-    SprintSummary, StatusSummary, TimeEntryActivitySummary, TimeEntrySummary, TypeSummary,
-    UpdateProjectRequest, UpdateTimeEntryRequest, UpdateWorkPackageRequest, UserSummary,
-    VersionSummary, WorkPackageSchemaSummary, WorkPackageSummary,
+    ActivitySummary, CreateProjectRequest, CreateRelationRequest, CreateTimeEntryRequest,
+    CreateVersionRequest, CreateWorkPackageRequest, CustomFieldSchema, CustomOptionSummary,
+    HalActivity, HalCollection, HalCustomOption, HalMembership, HalPriority, HalProject,
+    HalRelation, HalSprint, HalStatus, HalTimeEntry, HalTimeEntryActivity, HalType, HalUser,
+    HalVersion, HalWorkPackage, MembershipSummary, PaginatedResponse, PrioritySummary,
+    ProjectSchemaSummary, ProjectSummary, RelationSummary, SprintSummary, StatusSummary,
+    TimeEntryActivitySummary, TimeEntrySummary, TypeSummary, UpdateProjectRequest,
+    UpdateTimeEntryRequest, UpdateWorkPackageRequest, UserSummary, VersionSummary,
+    WorkPackageSchemaSummary, WorkPackageSummary,
 };
 use reqwest::{Method, RequestBuilder, Response, header};
 use serde_json::json;
@@ -148,44 +149,49 @@ impl OpenProjectClient {
         }
 
         if let Some(status_input) = req.status {
-            let normalized = status_input.trim().to_lowercase();
-            let mut links = serde_json::Map::new();
-
-            if normalized.is_empty()
-                || normalized == "none"
-                || normalized == "null"
-                || normalized == "clear"
-            {
-                links.insert("status".into(), json!({ "href": null }));
-            } else {
-                let status_id = match normalized.as_str() {
-                    "on_track" | "on track" | "ontrack" | "no cronograma" => "on_track",
-                    "at_risk" | "at risk" | "atrisk" | "em risco" => "at_risk",
-                    "off_track" | "off track" | "offtrack" | "fora do cronograma" => "off_track",
-                    "not_started" | "not started" | "não iniciado" | "nao iniciado" => {
-                        "not_started"
-                    }
-                    "finished" | "concluído" | "concluido" => "finished",
-                    "discontinued" | "descontinuado" => "discontinued",
-                    other => {
-                        if let Some(stripped) = other.strip_prefix("/api/v3/project_statuses/") {
-                            stripped
-                        } else {
-                            other
-                        }
-                    }
-                };
-                links.insert(
-                    "status".into(),
-                    json!({ "href": format!("/api/v3/project_statuses/{status_id}") }),
-                );
-            }
-            body["_links"] = serde_json::Value::Object(links);
+            body["_links"] = json!({ "status": Self::project_status_link(&status_input) });
         }
 
         let path = format!("projects/{}", req.id_or_identifier.trim());
         let resp = self
             .request(Method::PATCH, &path)
+            .header(header::CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let resp_body = Self::handle_response(resp).await?;
+        let project: HalProject = serde_json::from_str(&resp_body)?;
+        Ok(project.into())
+    }
+
+    /// Creates a new project (POST /api/v3/projects)
+    pub async fn create_project(
+        &self,
+        req: CreateProjectRequest,
+    ) -> Result<ProjectSummary, OpenProjectError> {
+        let mut body = json!({
+            "name": req.name,
+            "identifier": req.identifier,
+            "public": req.public.unwrap_or(false),
+        });
+
+        if let Some(desc) = req.description {
+            body["description"] = json!({ "raw": desc });
+        }
+
+        if let Some(parent_id) = req.parent_id {
+            body["_links"] = json!({
+                "parent": { "href": format!("/api/v3/projects/{parent_id}") }
+            });
+        }
+
+        if let Some(fields) = req.custom_fields {
+            Self::apply_custom_fields(&mut body, fields);
+        }
+
+        let resp = self
+            .request(Method::POST, "projects")
             .header(header::CONTENT_TYPE, "application/json")
             .json(&body)
             .send()
@@ -786,6 +792,93 @@ impl OpenProjectClient {
                 )
             })?;
 
+        let (custom_fields, standard_fields) = Self::parse_schema_fields(schema_obj);
+
+        Ok(WorkPackageSchemaSummary {
+            project_id,
+            type_id,
+            custom_fields,
+            standard_fields: if include_standard_fields {
+                standard_fields
+            } else {
+                Vec::new()
+            },
+        })
+    }
+
+    /// Fetches the project schema with writable attributes (including required custom fields)
+    pub async fn get_project_schema(
+        &self,
+        include_standard_fields: bool,
+    ) -> Result<ProjectSchemaSummary, OpenProjectError> {
+        let resp = self.request(Method::GET, "projects/schema").send().await?;
+        let body = Self::handle_response(resp).await?;
+        let schema: serde_json::Value = serde_json::from_str(&body)?;
+        let schema_obj = schema.as_object().ok_or_else(|| {
+            OpenProjectError::Validation(
+                "OpenProject project schema response was not a JSON object".into(),
+            )
+        })?;
+
+        let (custom_fields, standard_fields) = Self::parse_schema_fields(schema_obj);
+
+        Ok(ProjectSchemaSummary {
+            custom_fields,
+            standard_fields: if include_standard_fields {
+                standard_fields
+            } else {
+                Vec::new()
+            },
+        })
+    }
+
+    /// Retrieves details of a specific CustomOption by ID
+    pub async fn get_custom_option(
+        &self,
+        id: i64,
+    ) -> Result<CustomOptionSummary, OpenProjectError> {
+        let path = format!("custom_options/{id}");
+        let resp = self.request(Method::GET, &path).send().await?;
+        let body = Self::handle_response(resp).await?;
+        let opt: HalCustomOption = serde_json::from_str(&body)?;
+        Ok(opt.into())
+    }
+
+    /// Maps a friendly project status input to a HAL link value
+    fn project_status_link(status_input: &str) -> serde_json::Value {
+        let normalized = status_input.trim().to_lowercase();
+
+        if normalized.is_empty()
+            || normalized == "none"
+            || normalized == "null"
+            || normalized == "clear"
+        {
+            return json!({ "href": null });
+        }
+
+        let status_id = match normalized.as_str() {
+            "on_track" | "on track" | "ontrack" | "no cronograma" => "on_track",
+            "at_risk" | "at risk" | "atrisk" | "em risco" => "at_risk",
+            "off_track" | "off track" | "offtrack" | "fora do cronograma" => "off_track",
+            "not_started" | "not started" | "não iniciado" | "nao iniciado" => "not_started",
+            "finished" | "concluído" | "concluido" => "finished",
+            "discontinued" | "descontinuado" => "discontinued",
+            other => {
+                if let Some(stripped) = other.strip_prefix("/api/v3/project_statuses/") {
+                    stripped
+                } else {
+                    other
+                }
+            }
+        };
+
+        json!({ "href": format!("/api/v3/project_statuses/{status_id}") })
+    }
+
+    /// Splits a schema object into custom and standard fields, sorted by key
+    fn parse_schema_fields(
+        schema_obj: &serde_json::Map<String, serde_json::Value>,
+    ) -> (Vec<CustomFieldSchema>, Vec<CustomFieldSchema>) {
         let mut custom_fields = Vec::new();
         let mut standard_fields = Vec::new();
 
@@ -800,45 +893,37 @@ impl OpenProjectClient {
                 continue;
             };
 
-            let name = def_obj
-                .get("name")
-                .and_then(|n| n.as_str())
-                .unwrap_or(key)
-                .to_string();
-            let required = def_obj
-                .get("required")
-                .and_then(|r| r.as_bool())
-                .unwrap_or(false);
-            let writable = def_obj
-                .get("writable")
-                .and_then(|w| w.as_bool())
-                .unwrap_or(false);
-            let has_default = def_obj
-                .get("hasDefault")
-                .and_then(|d| d.as_bool())
-                .unwrap_or(false);
-            let location = def_obj
-                .get("location")
-                .and_then(|l| l.as_str())
-                .unwrap_or("root")
-                .to_string();
-
-            let allowed_values = Self::extract_allowed_values(def_obj);
-
             let entry = CustomFieldSchema {
                 key: key.clone(),
-                name,
+                name: def_obj
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .unwrap_or(key)
+                    .to_string(),
                 field_type: field_type.to_string(),
-                required,
-                writable,
-                has_default,
-                location,
-                allowed_values,
+                required: def_obj
+                    .get("required")
+                    .and_then(|r| r.as_bool())
+                    .unwrap_or(false),
+                writable: def_obj
+                    .get("writable")
+                    .and_then(|w| w.as_bool())
+                    .unwrap_or(false),
+                has_default: def_obj
+                    .get("hasDefault")
+                    .and_then(|d| d.as_bool())
+                    .unwrap_or(false),
+                location: def_obj
+                    .get("location")
+                    .and_then(|l| l.as_str())
+                    .unwrap_or("root")
+                    .to_string(),
+                allowed_values: Self::extract_allowed_values(def_obj),
             };
 
             if key.starts_with("customField") {
                 custom_fields.push(entry);
-            } else if include_standard_fields {
+            } else {
                 standard_fields.push(entry);
             }
         }
@@ -846,24 +931,7 @@ impl OpenProjectClient {
         custom_fields.sort_by(|a, b| a.key.cmp(&b.key));
         standard_fields.sort_by(|a, b| a.key.cmp(&b.key));
 
-        Ok(WorkPackageSchemaSummary {
-            project_id,
-            type_id,
-            custom_fields,
-            standard_fields,
-        })
-    }
-
-    /// Retrieves details of a specific CustomOption by ID
-    pub async fn get_custom_option(
-        &self,
-        id: i64,
-    ) -> Result<CustomOptionSummary, OpenProjectError> {
-        let path = format!("custom_options/{id}");
-        let resp = self.request(Method::GET, &path).send().await?;
-        let body = Self::handle_response(resp).await?;
-        let opt: HalCustomOption = serde_json::from_str(&body)?;
-        Ok(opt.into())
+        (custom_fields, standard_fields)
     }
 
     /// Merges custom_fields into a Work Package request body, routing HAL link values into `_links`

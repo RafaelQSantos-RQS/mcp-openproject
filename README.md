@@ -17,13 +17,14 @@ Desenvolvido para permitir que assistentes de IA (Claude Desktop, Antigravity, C
 
 ---
 
-## 🛠️ Catálogo de Ferramentas (30 Tools)
+## 🛠️ Catálogo de Ferramentas (32 Tools)
 
 | Ferramenta | Descrição | Principais Parâmetros |
 | :--- | :--- | :--- |
 | `list_projects` | Lista projetos acessíveis com suporte a paginação | `page`, `page_size` |
 | `get_project` | Detalhes completos de um projeto (incluindo status e descrição do status) | `id_or_identifier` |
 | `update_project` | Atualiza atributos de um projeto (descrição, status de saúde, explicação do status, nome, etc.) | `id_or_identifier`, `description`, `status` (`'on_track'`, `'at_risk'`, `'off_track'`, etc.), `status_explanation`, `name`, `public` |
+| `create_project` | Cria um novo projeto (suporta subprojetos via `parent_id` e campos customizados) | `name`, `identifier` (único, minúsculas/números/hífens), `description`, `public`, `parent_id`, `custom_fields` |
 | `search_work_packages` | Pesquisa e filtra work packages (tarefas, bugs, épicos) | `query`, `project_id`, `type_id`, `status`, `assignee_id`, `sprint_id`, `version_id`, `page`, `page_size` |
 | `get_work_package` | Recupera detalhes completos de um work package por ID (incluindo progresso, estimativas, sprint, versão e tempo gasto) | `id` |
 | `create_work_package` | Cria um novo work package (suporta subtarefas via `parent_id`, alocação em `sprint_id`, versão em `version_id`, estimativa, trabalho restante e % concluído) | `project_id`, `type_id`, `subject`, `parent_id`, `sprint_id`, `version_id`, `estimated_time`, `remaining_time`, `percentage_done`, `description`, `status_id`, `priority_id`, `assignee_id`, `custom_fields` |
@@ -41,6 +42,7 @@ Desenvolvido para permitir que assistentes de IA (Claude Desktop, Antigravity, C
 | `list_versions` | Lista versões / milestones cadastrados, com suporte a filtro por projeto ou global | `project_id` (opcional) |
 | `get_version` | Obtém detalhes de uma versão / milestone por ID (nome, status, datas, compartilhamento e projeto definidor) | `id` |
 | `get_work_package_schema` | Inspeciona campos customizados ativos (`customField*`), tipos, obrigatoriedade, localização (`_links` vs raiz) e opções permitidas (`allowed_values`) para um projeto/tipo | `project_id`, `type_id` (opcional), `include_standard_fields` (opcional) |
+| `get_project_schema` | Inspeciona atributos graváveis do projeto, incluindo campos customizados obrigatórios (`customField*`), tipos, localização (`_links` vs raiz) e opções permitidas | `include_standard_fields` (opcional) |
 | `get_custom_option` | Obtém detalhes (`id`, `value`, `href`) de uma `CustomOption` específica por ID | `id` |
 | `list_priorities` | Lista as prioridades disponíveis (Baixa, Normal, Alta, Imediata) e seus IDs | *(Nenhum)* |
 | `add_work_package_comment` | Registra um comentário / nota no histórico de atividades de um work package sem alterar a descrição | `work_package_id`, `comment`, `internal` (opcional) |

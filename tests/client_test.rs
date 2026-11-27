@@ -2,8 +2,8 @@ use mcp_openproject::client::OpenProjectClient;
 use mcp_openproject::client::error::OpenProjectError;
 use mcp_openproject::client::filters::TimeEntryFilterBuilder;
 use mcp_openproject::client::models::{
-    CreateRelationRequest, CreateVersionRequest, CreateWorkPackageRequest, UpdateProjectRequest,
-    UpdateWorkPackageRequest,
+    CreateProjectRequest, CreateRelationRequest, CreateVersionRequest, CreateWorkPackageRequest,
+    UpdateProjectRequest, UpdateWorkPackageRequest,
 };
 use mcp_openproject::config::Config;
 use serde_json::json;
@@ -1362,4 +1362,134 @@ async fn test_mock_delete_time_entry() {
     let client = OpenProjectClient::new(config).unwrap();
 
     client.delete_time_entry(2592).await.unwrap();
+}
+
+#[tokio::test]
+async fn test_mock_create_project() {
+    let mock_server = MockServer::start().await;
+
+    let expected_body = json!({
+        "name": "Sidequests NDSI",
+        "identifier": "sidequests-ndsi",
+        "public": false,
+        "description": { "raw": "Projeto de **sidequests**" },
+        "_links": {
+            "parent": { "href": "/api/v3/projects/117" }
+        },
+        "customField35": "Portfólio"
+    });
+
+    let response_body = json!({
+        "_type": "Project",
+        "id": 200,
+        "identifier": "sidequests-ndsi",
+        "name": "Sidequests NDSI",
+        "active": true,
+        "public": false,
+        "description": {
+            "format": "markdown",
+            "raw": "Projeto de **sidequests**"
+        },
+        "_links": {
+            "parent": { "href": "/api/v3/projects/117", "title": "Portfólio" }
+        }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/api/v3/projects"))
+        .and(wiremock::matchers::body_json(&expected_body))
+        .respond_with(ResponseTemplate::new(201).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let mut custom_fields = std::collections::HashMap::new();
+    custom_fields.insert("customField35".into(), json!("Portfólio"));
+
+    let created = client
+        .create_project(CreateProjectRequest {
+            name: "Sidequests NDSI".into(),
+            identifier: "sidequests-ndsi".into(),
+            description: Some("Projeto de **sidequests**".into()),
+            public: None,
+            parent_id: Some(117),
+            custom_fields: Some(custom_fields),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(created.id, 200);
+    assert_eq!(created.identifier, "sidequests-ndsi");
+    assert_eq!(created.name, "Sidequests NDSI");
+    assert!(!created.public);
+    assert_eq!(
+        created.description,
+        Some("Projeto de **sidequests**".into())
+    );
+}
+
+#[tokio::test]
+async fn test_mock_get_project_schema() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "Schema",
+        "_links": { "self": { "href": "/api/v3/projects/schema" } },
+        "_attributeGroups": [
+            { "_type": "ProjectFormCustomFieldSection", "name": "Project Details", "attributes": ["customField35"] }
+        ],
+        "name": {
+            "type": "String",
+            "name": "Name",
+            "required": true,
+            "writable": true,
+            "hasDefault": false
+        },
+        "customField35": {
+            "type": "String",
+            "name": "Portfólio",
+            "required": true,
+            "writable": true,
+            "hasDefault": false
+        },
+        "customField31": {
+            "type": "CustomOption",
+            "name": "Lista",
+            "required": false,
+            "writable": true,
+            "hasDefault": false,
+            "location": "_links",
+            "_links": {
+                "allowedValues": [
+                    { "href": "/api/v3/custom_options/25", "title": "Backend" }
+                ]
+            }
+        }
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/projects/schema"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let schema = client.get_project_schema(false).await.unwrap();
+
+    assert!(schema.standard_fields.is_empty());
+    assert_eq!(schema.custom_fields.len(), 2);
+    assert_eq!(schema.custom_fields[0].key, "customField31");
+    assert_eq!(schema.custom_fields[0].location, "_links");
+    assert_eq!(schema.custom_fields[0].allowed_values[0].id, Some(25));
+    assert_eq!(schema.custom_fields[0].allowed_values[0].value, "Backend");
+    assert_eq!(schema.custom_fields[1].key, "customField35");
+    assert!(schema.custom_fields[1].required);
+
+    let with_standard = client.get_project_schema(true).await.unwrap();
+    assert_eq!(with_standard.standard_fields.len(), 1);
+    assert_eq!(with_standard.standard_fields[0].key, "name");
 }

@@ -3,8 +3,9 @@ pub mod tools;
 use crate::client::OpenProjectClient;
 use crate::client::filters::{TimeEntryFilterBuilder, WorkPackageFilterBuilder};
 use crate::client::models::{
-    CreateRelationRequest, CreateTimeEntryRequest, CreateVersionRequest, CreateWorkPackageRequest,
-    UpdateProjectRequest, UpdateTimeEntryRequest, UpdateWorkPackageRequest,
+    CreateProjectRequest, CreateRelationRequest, CreateTimeEntryRequest, CreateVersionRequest,
+    CreateWorkPackageRequest, UpdateProjectRequest, UpdateTimeEntryRequest,
+    UpdateWorkPackageRequest,
 };
 use rmcp::{
     ErrorData, ServerHandler,
@@ -13,14 +14,14 @@ use rmcp::{
     tool, tool_handler, tool_router,
 };
 use tools::{
-    AddProjectMemberParams, AddWorkPackageCommentParams, CreateRelationParams, CreateVersionParams,
-    CreateWorkPackageParams, DeleteRelationParams, DeleteTimeEntryParams, GetCurrentUserParams,
-    GetCustomOptionParams, GetProjectParams, GetSprintParams, GetVersionParams,
-    GetWorkPackageParams, GetWorkPackageSchemaParams, ListPrioritiesParams,
-    ListProjectAssigneesParams, ListProjectsParams, ListRelationsParams, ListSprintsParams,
-    ListStatusesParams, ListTimeEntriesParams, ListTimeEntryActivitiesParams, ListTypesParams,
-    ListVersionsParams, ListWorkPackageActivitiesParams, LogTimeParams, SearchWorkPackagesParams,
-    UpdateProjectParams, UpdateTimeEntryParams, UpdateWorkPackageParams,
+    AddProjectMemberParams, AddWorkPackageCommentParams, CreateProjectParams, CreateRelationParams,
+    CreateVersionParams, CreateWorkPackageParams, DeleteRelationParams, DeleteTimeEntryParams,
+    GetCurrentUserParams, GetCustomOptionParams, GetProjectParams, GetProjectSchemaParams,
+    GetSprintParams, GetVersionParams, GetWorkPackageParams, GetWorkPackageSchemaParams,
+    ListPrioritiesParams, ListProjectAssigneesParams, ListProjectsParams, ListRelationsParams,
+    ListSprintsParams, ListStatusesParams, ListTimeEntriesParams, ListTimeEntryActivitiesParams,
+    ListTypesParams, ListVersionsParams, ListWorkPackageActivitiesParams, LogTimeParams,
+    SearchWorkPackagesParams, UpdateProjectParams, UpdateTimeEntryParams, UpdateWorkPackageParams,
 };
 
 #[derive(Clone)]
@@ -110,6 +111,34 @@ impl OpenProjectServer {
             )),
             Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                 "Failed to update project '{id}': {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "create_project",
+        description = "Create a new project in OpenProject. Requires name and a unique identifier (lowercase letters, numbers and hyphens). Supports optional description, visibility, parent project (subproject) and custom fields. Use get_project_schema to discover required project custom fields first."
+    )]
+    pub async fn create_project(
+        &self,
+        Parameters(params): Parameters<CreateProjectParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let identifier = params.identifier.clone();
+        let req = CreateProjectRequest {
+            name: params.name,
+            identifier: params.identifier,
+            description: params.description,
+            public: params.public,
+            parent_id: params.parent_id,
+            custom_fields: params.custom_fields,
+        };
+
+        match self.client.create_project(req).await {
+            Ok(project) => Ok(CallToolResult::structured(
+                serde_json::to_value(project).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to create project '{identifier}': {err}"
             ))])),
         }
     }
@@ -520,6 +549,25 @@ impl OpenProjectServer {
             Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                 "Failed to inspect work package schema for project #{}: {err}",
                 params.project_id
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "get_project_schema",
+        description = "Inspect writable project attributes (e.g. required custom fields like customField35), their types, required flags, location (_links vs root), and allowed CustomOption values. Use before create_project to avoid 422 validation errors."
+    )]
+    pub async fn get_project_schema(
+        &self,
+        Parameters(params): Parameters<GetProjectSchemaParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let include_standard = params.include_standard_fields.unwrap_or(false);
+        match self.client.get_project_schema(include_standard).await {
+            Ok(schema) => Ok(CallToolResult::structured(
+                serde_json::to_value(schema).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to inspect project schema: {err}"
             ))])),
         }
     }
