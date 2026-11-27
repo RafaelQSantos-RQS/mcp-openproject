@@ -17,19 +17,20 @@ Desenvolvido para permitir que assistentes de IA (Claude Desktop, Antigravity, C
 
 ---
 
-## 🛠️ Catálogo de Ferramentas (32 Tools)
+## 🛠️ Catálogo de Ferramentas (33 Tools)
 
 | Ferramenta | Descrição | Principais Parâmetros |
 | :--- | :--- | :--- |
 | `list_projects` | Lista projetos acessíveis com suporte a paginação | `page`, `page_size` |
 | `get_project` | Detalhes completos de um projeto (incluindo status e descrição do status) | `id_or_identifier` |
-| `update_project` | Atualiza atributos de um projeto (descrição, status de saúde, explicação do status, nome, etc.) | `id_or_identifier`, `description`, `status` (`'on_track'`, `'at_risk'`, `'off_track'`, etc.), `status_explanation`, `name`, `public` |
+| `update_project` | Atualiza atributos de um projeto (nome, identificador, descrição, status de saúde, visibilidade, arquivamento, projeto pai e campos customizados) | `id_or_identifier`, `description`, `status` (`'on_track'`, `'at_risk'`, `'off_track'`, etc.), `status_explanation`, `name`, `identifier`, `public`, `active` (`false` arquiva), `parent_id` (`0` remove o pai), `custom_fields` |
 | `create_project` | Cria um novo projeto (suporta subprojetos via `parent_id` e campos customizados) | `name`, `identifier` (único, minúsculas/números/hífens), `description`, `public`, `parent_id`, `custom_fields` |
 | `search_work_packages` | Pesquisa e filtra work packages (tarefas, bugs, épicos) | `query`, `project_id`, `type_id`, `status`, `assignee_id`, `sprint_id`, `version_id`, `page`, `page_size` |
 | `get_work_package` | Recupera detalhes completos de um work package por ID (incluindo progresso, estimativas, sprint, versão e tempo gasto) | `id` |
 | `create_work_package` | Cria um novo work package (suporta subtarefas via `parent_id`, alocação em `sprint_id`, versão em `version_id`, estimativa, trabalho restante e % concluído) | `project_id`, `type_id`, `subject`, `parent_id`, `sprint_id`, `version_id`, `estimated_time`, `remaining_time`, `percentage_done`, `description`, `status_id`, `priority_id`, `assignee_id`, `custom_fields` |
 | `update_work_package` | Atualiza atributos de um work package existente (alocação em `sprint_id`, `version_id` (0 para desassociar), progresso, estimativa, trabalho restante, etc.) | `id`, `parent_id`, `sprint_id`, `version_id`, `lock_version` (opcional), `estimated_time`, `remaining_time`, `percentage_done`, `subject`, `description`, `status_id`, `type_id`, etc. |
 | `list_types` | Lista os tipos de work packages suportados (Tarefa, Bug, etc.) | *(Nenhum)* |
+| `list_project_types` | Lista os tipos de work package habilitados em um projeto específico | `project_id` |
 | `list_statuses` | Lista os status disponíveis no fluxo de trabalho | *(Nenhum)* |
 | `get_current_user` | Obtém dados do usuário autenticado pela API key (ID, nome, email, login, admin) | *(Nenhum)* |
 | `list_project_assignees` | Lista usuários elegíveis para receber atribuição de tarefas no projeto | `project_id` |

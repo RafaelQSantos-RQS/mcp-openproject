@@ -136,6 +136,10 @@ impl OpenProjectClient {
             body["name"] = json!(name);
         }
 
+        if let Some(identifier) = req.identifier {
+            body["identifier"] = json!(identifier);
+        }
+
         if let Some(desc) = req.description {
             body["description"] = json!({ "raw": desc });
         }
@@ -148,8 +152,32 @@ impl OpenProjectClient {
             body["public"] = json!(pub_flag);
         }
 
+        if let Some(active) = req.active {
+            body["active"] = json!(active);
+        }
+
+        let mut links = serde_json::Map::new();
         if let Some(status_input) = req.status {
-            body["_links"] = json!({ "status": Self::project_status_link(&status_input) });
+            links.insert("status".into(), Self::project_status_link(&status_input));
+        }
+
+        if let Some(parent_id) = req.parent_id {
+            links.insert(
+                "parent".into(),
+                if parent_id > 0 {
+                    json!({ "href": format!("/api/v3/projects/{parent_id}") })
+                } else {
+                    json!({ "href": null })
+                },
+            );
+        }
+
+        if !links.is_empty() {
+            body["_links"] = serde_json::Value::Object(links);
+        }
+
+        if let Some(fields) = req.custom_fields {
+            Self::apply_custom_fields(&mut body, fields);
         }
 
         let path = format!("projects/{}", req.id_or_identifier.trim());
@@ -489,6 +517,18 @@ impl OpenProjectClient {
     /// Lists all work package types available in OpenProject
     pub async fn list_types(&self) -> Result<Vec<TypeSummary>, OpenProjectError> {
         let resp = self.request(Method::GET, "types").send().await?;
+        let body = Self::handle_response(resp).await?;
+        let col: HalCollection<HalType> = serde_json::from_str(&body)?;
+        Ok(col.embedded.elements.into_iter().map(Into::into).collect())
+    }
+
+    /// Lists work package types available (enabled) in a specific project
+    pub async fn list_project_types(
+        &self,
+        project_id: i64,
+    ) -> Result<Vec<TypeSummary>, OpenProjectError> {
+        let path = format!("projects/{project_id}/types");
+        let resp = self.request(Method::GET, &path).send().await?;
         let body = Self::handle_response(resp).await?;
         let col: HalCollection<HalType> = serde_json::from_str(&body)?;
         Ok(col.embedded.elements.into_iter().map(Into::into).collect())
@@ -934,7 +974,7 @@ impl OpenProjectClient {
         (custom_fields, standard_fields)
     }
 
-    /// Merges custom_fields into a Work Package request body, routing HAL link values into `_links`
+    /// Merges custom_fields into a request body, routing HAL link values into `_links`
     fn apply_custom_fields(
         body: &mut serde_json::Value,
         fields: HashMap<String, serde_json::Value>,

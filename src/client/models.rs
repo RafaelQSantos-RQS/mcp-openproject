@@ -147,10 +147,14 @@ impl From<HalProject> for ProjectSummary {
 pub struct UpdateProjectRequest {
     pub id_or_identifier: String,
     pub name: Option<String>,
+    pub identifier: Option<String>,
     pub description: Option<String>,
     pub status: Option<String>,
     pub status_explanation: Option<String>,
     pub public: Option<bool>,
+    pub active: Option<bool>,
+    pub parent_id: Option<i64>,
+    pub custom_fields: Option<HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

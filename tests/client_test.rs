@@ -1493,3 +1493,99 @@ async fn test_mock_get_project_schema() {
     assert_eq!(with_standard.standard_fields.len(), 1);
     assert_eq!(with_standard.standard_fields[0].key, "name");
 }
+
+#[tokio::test]
+async fn test_mock_update_project_extra_fields() {
+    let mock_server = MockServer::start().await;
+
+    let expected_body = json!({
+        "identifier": "sidequests-ndsi",
+        "active": false,
+        "_links": {
+            "parent": { "href": null },
+            "customField10": [
+                { "href": "/api/v3/custom_options/25" }
+            ]
+        },
+        "customField12": true
+    });
+
+    let response_body = json!({
+        "_type": "Project",
+        "id": 122,
+        "identifier": "sidequests-ndsi",
+        "name": "Sidequests NDSI",
+        "active": false,
+        "public": false,
+        "_links": {
+            "customField10": [
+                { "href": "/api/v3/custom_options/25", "title": "Backend" }
+            ]
+        }
+    });
+
+    Mock::given(method("PATCH"))
+        .and(path("/api/v3/projects/122"))
+        .and(wiremock::matchers::body_json(&expected_body))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let mut custom_fields = std::collections::HashMap::new();
+    custom_fields.insert("customField12".into(), json!(true));
+    custom_fields.insert(
+        "customField10".into(),
+        json!([{ "href": "/api/v3/custom_options/25" }]),
+    );
+
+    let updated = client
+        .update_project(UpdateProjectRequest {
+            id_or_identifier: "122".into(),
+            identifier: Some("sidequests-ndsi".into()),
+            active: Some(false),
+            parent_id: Some(0),
+            custom_fields: Some(custom_fields),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(updated.id, 122);
+    assert_eq!(updated.identifier, "sidequests-ndsi");
+    assert!(!updated.active);
+}
+
+#[tokio::test]
+async fn test_mock_list_project_types() {
+    let mock_server = MockServer::start().await;
+
+    let response_body = json!({
+        "_type": "Collection",
+        "total": 2,
+        "count": 2,
+        "_embedded": {
+            "elements": [
+                { "id": 1, "name": "Task", "color": "#1A67A3", "isDefault": true, "isMilestone": false },
+                { "id": 2, "name": "Milestone", "color": "#979797", "isDefault": false, "isMilestone": true }
+            ]
+        }
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/api/v3/projects/122/types"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response_body))
+        .mount(&mock_server)
+        .await;
+
+    let config = Config::new(mock_server.uri(), "token".into()).unwrap();
+    let client = OpenProjectClient::new(config).unwrap();
+
+    let types = client.list_project_types(122).await.unwrap();
+    assert_eq!(types.len(), 2);
+    assert_eq!(types[0].name, "Task");
+    assert!(types[0].is_default);
+    assert!(types[1].is_milestone);
+}

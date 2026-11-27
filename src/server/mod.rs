@@ -18,10 +18,11 @@ use tools::{
     CreateVersionParams, CreateWorkPackageParams, DeleteRelationParams, DeleteTimeEntryParams,
     GetCurrentUserParams, GetCustomOptionParams, GetProjectParams, GetProjectSchemaParams,
     GetSprintParams, GetVersionParams, GetWorkPackageParams, GetWorkPackageSchemaParams,
-    ListPrioritiesParams, ListProjectAssigneesParams, ListProjectsParams, ListRelationsParams,
-    ListSprintsParams, ListStatusesParams, ListTimeEntriesParams, ListTimeEntryActivitiesParams,
-    ListTypesParams, ListVersionsParams, ListWorkPackageActivitiesParams, LogTimeParams,
-    SearchWorkPackagesParams, UpdateProjectParams, UpdateTimeEntryParams, UpdateWorkPackageParams,
+    ListPrioritiesParams, ListProjectAssigneesParams, ListProjectTypesParams, ListProjectsParams,
+    ListRelationsParams, ListSprintsParams, ListStatusesParams, ListTimeEntriesParams,
+    ListTimeEntryActivitiesParams, ListTypesParams, ListVersionsParams,
+    ListWorkPackageActivitiesParams, LogTimeParams, SearchWorkPackagesParams, UpdateProjectParams,
+    UpdateTimeEntryParams, UpdateWorkPackageParams,
 };
 
 #[derive(Clone)]
@@ -99,10 +100,14 @@ impl OpenProjectServer {
         let req = UpdateProjectRequest {
             id_or_identifier: params.id_or_identifier,
             name: params.name,
+            identifier: params.identifier,
             description: params.description,
             status: params.status,
             status_explanation: params.status_explanation,
             public: params.public,
+            active: params.active,
+            parent_id: params.parent_id,
+            custom_fields: params.custom_fields,
         };
 
         match self.client.update_project(req).await {
@@ -295,6 +300,25 @@ impl OpenProjectServer {
             )),
             Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                 "Failed to list types: {err}"
+            ))])),
+        }
+    }
+
+    #[tool(
+        name = "list_project_types",
+        description = "List the work package types available (enabled) in a specific project, with their IDs, names, colors and milestone flags"
+    )]
+    pub async fn list_project_types(
+        &self,
+        Parameters(params): Parameters<ListProjectTypesParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.client.list_project_types(params.project_id).await {
+            Ok(types) => Ok(CallToolResult::structured(
+                serde_json::to_value(types).unwrap_or_default(),
+            )),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Failed to list types for project #{}: {err}",
+                params.project_id
             ))])),
         }
     }

@@ -31,8 +31,23 @@ pub struct UpdateProjectParams {
     pub status_explanation: Option<String>,
     /// Optional new project name
     pub name: Option<String>,
+    /// Optional new project identifier (unique slug: lowercase letters, numbers and hyphens)
+    pub identifier: Option<String>,
     /// Optional public/private visibility flag
     pub public: Option<bool>,
+    /// Optional active flag: false archives the project, true unarchives it
+    pub active: Option<bool>,
+    /// Optional parent project ID (0 or negative removes the parent, making it a top-level project)
+    pub parent_id: Option<i64>,
+    /// Custom fields key-value map. Scalar/text fields go at root; HAL link fields (e.g. {"customField10": {"href": "/api/v3/custom_options/25"}}) are automatically placed under _links. Use `get_project_schema` to discover keys and allowed options.
+    pub custom_fields: Option<HashMap<String, serde_json::Value>>,
+}
+
+/// Parameters for listing types available in a project
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ListProjectTypesParams {
+    /// Numeric Project ID
+    pub project_id: i64,
 }
 
 /// Parameters for creating a new project

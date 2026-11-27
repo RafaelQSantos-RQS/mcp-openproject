@@ -14,7 +14,7 @@ fn test_server_registers_all_tools() {
     let server = OpenProjectServer::new(client);
 
     let tools = server.router().list_all();
-    assert_eq!(tools.len(), 32);
+    assert_eq!(tools.len(), 33);
 
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
     assert!(names.contains(&"list_projects"));
@@ -27,6 +27,7 @@ fn test_server_registers_all_tools() {
     assert!(names.contains(&"create_work_package"));
     assert!(names.contains(&"update_work_package"));
     assert!(names.contains(&"list_types"));
+    assert!(names.contains(&"list_project_types"));
     assert!(names.contains(&"list_statuses"));
     assert!(names.contains(&"list_priorities"));
     assert!(names.contains(&"get_current_user"));
